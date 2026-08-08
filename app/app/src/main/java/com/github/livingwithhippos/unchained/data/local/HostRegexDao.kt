@@ -5,10 +5,8 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import com.github.livingwithhippos.unchained.data.model.HostRegex
-import com.github.livingwithhippos.unchained.data.model.REGEX_TYPE_FOLDER
-import com.github.livingwithhippos.unchained.data.model.REGEX_TYPE_HOST
 
-/** This Dao manage the queries for the host regexps. */
+/** This Dao manages the queries for the cached hoster-matching regexps. */
 @Dao
 interface HostRegexDao {
 
@@ -18,17 +16,5 @@ interface HostRegexDao {
 
     @Query("SELECT * from host_regex") suspend fun getAllRegexps(): List<HostRegex>
 
-    @Query("SELECT * from host_regex WHERE host_regex.type = $REGEX_TYPE_HOST")
-    suspend fun getHostRegexps(): List<HostRegex>
-
-    @Query("SELECT * from host_regex WHERE host_regex.type = $REGEX_TYPE_FOLDER")
-    suspend fun getFoldersRegexps(): List<HostRegex>
-
     @Query("DELETE FROM host_regex") suspend fun deleteAll()
-
-    @Query("DELETE FROM host_regex WHERE host_regex.type = $REGEX_TYPE_HOST")
-    suspend fun deleteAllHosts()
-
-    @Query("DELETE FROM host_regex WHERE host_regex.type = $REGEX_TYPE_FOLDER")
-    suspend fun deleteAllFolders()
 }

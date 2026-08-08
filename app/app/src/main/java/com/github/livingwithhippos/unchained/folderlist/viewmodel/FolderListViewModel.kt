@@ -7,33 +7,39 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.github.livingwithhippos.unchained.data.model.DownloadItem
+import com.github.livingwithhippos.unchained.data.model.InnerTorrentFile
 import com.github.livingwithhippos.unchained.data.model.UnchainedNetworkException
-import com.github.livingwithhippos.unchained.data.repository.DownloadRepository
-import com.github.livingwithhippos.unchained.data.repository.UnrestrictRepository
+import com.github.livingwithhippos.unchained.data.repository.TorrentsRepository
+import com.github.livingwithhippos.unchained.data.repository.WebDownloadRepository
 import com.github.livingwithhippos.unchained.folderlist.view.FolderListFragment
 import com.github.livingwithhippos.unchained.utilities.EitherResult
 import com.github.livingwithhippos.unchained.utilities.Event
 import com.github.livingwithhippos.unchained.utilities.postEvent
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
+import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlin.time.Duration.Companion.milliseconds
 
+/**
+ * Resolves a direct download link for each file of a multi-file torrent or webdl item, one
+ * `requestdl` call at a time, showing progress as they come in - TorBox has no bulk "download all"
+ * link, only a per-file (or whole-item zip) one.
+ */
 @HiltViewModel
 class FolderListViewModel
 @Inject
 constructor(
     private val savedStateHandle: SavedStateHandle,
     private val preferences: SharedPreferences,
-    private val unrestrictRepository: UnrestrictRepository,
-    private val downloadRepository: DownloadRepository,
+    private val torrentsRepository: TorrentsRepository,
+    private val webDownloadRepository: WebDownloadRepository,
 ) : ViewModel() {
 
     val folderLiveData = MutableLiveData<Event<List<DownloadItem>>>()
-    val deletedDownloadLiveData = MutableLiveData<Event<DownloadItem>>()
+    val removedDownloadLiveData = MutableLiveData<Event<DownloadItem>>()
     val errorsLiveData = MutableLiveData<Event<UnchainedNetworkException>>()
     val progressLiveData = MutableLiveData<Int>()
 
@@ -47,42 +53,39 @@ constructor(
         return preferences.getBoolean(KEY_SHOW_FOLDER_FILTERS, false)
     }
 
-    fun retrieveFolderFileList(folderLink: String) {
-        viewModelScope.launch {
-            val filesList: EitherResult<UnchainedNetworkException, List<String>> =
-                unrestrictRepository.getEitherFolderLinks(folderLink)
-
-            when (filesList) {
-                is EitherResult.Failure -> errorsLiveData.postEvent(filesList.failure)
-                is EitherResult.Success -> retrieveFiles(filesList.success)
-            }
-        }
+    fun retrieveTorrentFiles(torrentId: Long, files: List<InnerTorrentFile>) {
+        resolveFiles(files) { file -> torrentsRepository.getDownloadLink(torrentId, file.id, file = file) }
     }
 
-    fun retrieveFiles(links: List<String>) {
+    fun retrieveWebDownloadFiles(webId: Long, files: List<InnerTorrentFile>) {
+        resolveFiles(files) { file -> webDownloadRepository.getDownloadLink(webId, file.id, file = file) }
+    }
+
+    private fun resolveFiles(
+        files: List<InnerTorrentFile>,
+        request: suspend (InnerTorrentFile) -> EitherResult<UnchainedNetworkException, DownloadItem>,
+    ) {
         viewModelScope.launch {
-
-            // either first time or there were some errors, re-download
-            if (links.size != getRetrievedLinks()) {
-
+            // either first time or there were some errors, re-resolve
+            if (files.size != getRetrievedLinks()) {
                 val hitList = mutableListOf<DownloadItem>()
 
-                links.forEachIndexed { index, link ->
-                    when (val file = unrestrictRepository.getEitherUnrestrictedLink(link)) {
+                files.forEachIndexed { index, file ->
+                    when (val result = request(file)) {
                         is EitherResult.Failure -> {
-                            errorsLiveData.postEvent(file.failure)
-                            progressLiveData.postValue((index + 1) * 100 / links.size)
+                            errorsLiveData.postEvent(result.failure)
+                            progressLiveData.postValue((index + 1) * 100 / files.size)
                         }
                         is EitherResult.Success -> {
-                            hitList.add(file.success)
+                            hitList.add(result.success)
                             folderLiveData.postEvent(hitList.toList())
                             setRetrievedLinks(hitList.size)
-                            progressLiveData.postValue((index + 1) * 100 / links.size)
+                            progressLiveData.postValue((index + 1) * 100 / files.size)
                         }
                     }
                 }
             } else {
-                // I already downloaded all the files, repost the last value
+                // I already resolved all the files, repost the last value
                 folderLiveData.value?.let { folderLiveData.postEvent(it.peekContent()) }
             }
         }
@@ -96,13 +99,13 @@ constructor(
         return savedStateHandle[KEY_RETRIEVED_LINKS] ?: -1
     }
 
-    fun deleteDownloadList(downloads: List<DownloadItem>) {
-        viewModelScope.launch {
-            downloads.forEach {
-                val deleted = downloadRepository.deleteDownload(it.id)
-                if (deleted != null) deletedDownloadLiveData.postEvent(it)
-            }
-        }
+    /**
+     * Removes the given items from the displayed list. Unlike RD, there's no "delete this one
+     * resolved link" server operation in TorBox (only whole-torrent/webdl-item deletion), so this
+     * is a local-only, view-level removal.
+     */
+    fun removeFromView(items: List<DownloadItem>) {
+        items.forEach { removedDownloadLiveData.postEvent(it) }
     }
 
     fun filterList(query: String?) {

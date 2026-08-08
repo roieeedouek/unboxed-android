@@ -12,22 +12,25 @@ import androidx.recyclerview.selection.SelectionTracker
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.RecyclerView
 import com.github.livingwithhippos.unchained.R
-import com.github.livingwithhippos.unchained.data.model.DownloadItem
+import com.github.livingwithhippos.unchained.data.model.WebDownloadItem
 import com.github.livingwithhippos.unchained.databinding.ItemListDownloadBinding
 import com.github.livingwithhippos.unchained.utilities.extension.getFileSizeString
+import com.github.livingwithhippos.unchained.utilities.extension.getStatusTranslation
 
 class DownloadListPagingAdapter(private val listener: DownloadListListener) :
-    PagingDataAdapter<DownloadItem, DownloadViewHolder>(DiffCallback()) {
+    PagingDataAdapter<WebDownloadItem, DownloadViewHolder>(DiffCallback()) {
 
-    var tracker: SelectionTracker<DownloadItem>? = null
+    var tracker: SelectionTracker<WebDownloadItem>? = null
 
-    class DiffCallback : DiffUtil.ItemCallback<DownloadItem>() {
-        override fun areItemsTheSame(oldItem: DownloadItem, newItem: DownloadItem): Boolean =
+    class DiffCallback : DiffUtil.ItemCallback<WebDownloadItem>() {
+        override fun areItemsTheSame(oldItem: WebDownloadItem, newItem: WebDownloadItem): Boolean =
             oldItem.id == newItem.id
 
-        // content does not change on update
-        override fun areContentsTheSame(oldItem: DownloadItem, newItem: DownloadItem): Boolean =
-            true
+        override fun areContentsTheSame(
+            oldItem: WebDownloadItem,
+            newItem: WebDownloadItem,
+        ): Boolean =
+            oldItem.downloadState == newItem.downloadState && oldItem.progress == newItem.progress
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): DownloadViewHolder {
@@ -45,12 +48,12 @@ class DownloadListPagingAdapter(private val listener: DownloadListListener) :
 
     override fun getItemViewType(position: Int) = R.layout.item_list_download
 
-    fun getDownloadItem(position: Int): DownloadItem? {
+    fun getDownloadItem(position: Int): WebDownloadItem? {
         // snapshot().items[position]
         return super.getItem(position)
     }
 
-    fun getPosition(id: String) = snapshot().indexOfFirst { it?.id == id }
+    fun getPosition(id: Long) = snapshot().indexOfFirst { it?.id == id }
 }
 
 class DownloadViewHolder(
@@ -58,30 +61,28 @@ class DownloadViewHolder(
     private val listener: DownloadListListener,
 ) : RecyclerView.ViewHolder(binding.root) {
 
-    var mItem: DownloadItem? = null
+    var mItem: WebDownloadItem? = null
 
-    fun bindCell(item: DownloadItem, selected: Boolean) {
+    fun bindCell(item: WebDownloadItem, selected: Boolean) {
         mItem = item
-        binding.tvTitle.text =
-            if (item.streamable == 1) itemView.context.getString(R.string.streaming)
-            else itemView.context.getString(R.string.download)
-        binding.tvName.text = item.filename
-        binding.tvSize.text = getFileSizeString(itemView.context, item.fileSize)
+        binding.tvTitle.text = itemView.context.getStatusTranslation(item.downloadState)
+        binding.tvName.text = item.name
+        binding.tvSize.text = getFileSizeString(itemView.context, item.size)
         binding.selectionIndicator.visibility = if (selected) View.VISIBLE else View.GONE
         binding.cvDownload.setOnClickListener { listener.onClick(item) }
     }
 
-    fun getItemDetails(): ItemDetailsLookup.ItemDetails<DownloadItem> =
-        object : ItemDetailsLookup.ItemDetails<DownloadItem>() {
+    fun getItemDetails(): ItemDetailsLookup.ItemDetails<WebDownloadItem> =
+        object : ItemDetailsLookup.ItemDetails<WebDownloadItem>() {
             override fun getPosition(): Int = layoutPosition
 
-            override fun getSelectionKey(): DownloadItem? = mItem
+            override fun getSelectionKey(): WebDownloadItem? = mItem
         }
 }
 
 class DownloadDetailsLookup(private val recyclerView: RecyclerView) :
-    ItemDetailsLookup<DownloadItem>() {
-    override fun getItemDetails(event: MotionEvent): ItemDetails<DownloadItem>? {
+    ItemDetailsLookup<WebDownloadItem>() {
+    override fun getItemDetails(event: MotionEvent): ItemDetails<WebDownloadItem>? {
         val view = recyclerView.findChildViewUnder(event.x, event.y)
         if (view != null) {
             return (recyclerView.getChildViewHolder(view) as DownloadViewHolder).getItemDetails()
@@ -91,16 +92,16 @@ class DownloadDetailsLookup(private val recyclerView: RecyclerView) :
 }
 
 interface DownloadListListener {
-    fun onClick(item: DownloadItem)
+    fun onClick(item: WebDownloadItem)
 }
 
 class DownloadKeyProvider(private val adapter: DownloadListPagingAdapter) :
-    ItemKeyProvider<DownloadItem>(SCOPE_MAPPED) {
-    override fun getKey(position: Int): DownloadItem? {
+    ItemKeyProvider<WebDownloadItem>(SCOPE_MAPPED) {
+    override fun getKey(position: Int): WebDownloadItem? {
         return adapter.getDownloadItem(position)
     }
 
-    override fun getPosition(key: DownloadItem): Int {
+    override fun getPosition(key: WebDownloadItem): Int {
         return adapter.getPosition(key.id)
     }
 }

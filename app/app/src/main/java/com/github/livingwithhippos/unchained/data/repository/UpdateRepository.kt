@@ -14,7 +14,7 @@ constructor(protoStore: ProtoStore, private val updateApiHelper: UpdateApiHelper
     suspend fun getUpdates(url: String = SIGNATURE.URL): Updates? {
 
         val response =
-            safeApiCall(
+            safeApiCallRaw(
                 call = { updateApiHelper.getUpdates(url) },
                 errorMessage = "Error getting updates",
             )

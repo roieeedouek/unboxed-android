@@ -1,9 +1,8 @@
 package com.github.livingwithhippos.unchained.data.repository
 
 import com.github.livingwithhippos.unchained.data.local.ProtoStore
-import com.github.livingwithhippos.unchained.data.model.Authentication
-import com.github.livingwithhippos.unchained.data.model.Secrets
-import com.github.livingwithhippos.unchained.data.model.Token
+import com.github.livingwithhippos.unchained.data.model.DeviceAuthStart
+import com.github.livingwithhippos.unchained.data.model.DeviceToken
 import com.github.livingwithhippos.unchained.data.model.UnchainedNetworkException
 import com.github.livingwithhippos.unchained.data.remote.AuthApiHelper
 import com.github.livingwithhippos.unchained.utilities.EitherResult
@@ -14,84 +13,23 @@ class AuthenticationRepository
 constructor(protoStore: ProtoStore, private val apiHelper: AuthApiHelper) :
     BaseRepository(protoStore) {
 
-    suspend fun getVerificationCode(): Authentication? {
-
-        val authResponse =
-            safeApiCall(
-                call = { apiHelper.getAuthentication() },
-                errorMessage = "Error Fetching Authentication Info",
-            )
-
-        return authResponse
-    }
-
-    suspend fun getSecrets(code: String): Secrets? {
-
-        val secretResponse =
-            safeApiCall(
-                call = { apiHelper.getSecrets(deviceCode = code) },
-                errorMessage = "Error Fetching Secrets",
-            )
-        // fixme: if we receive 403 we must restart the process, ths returns null instead
-
-        return secretResponse
-    }
-
-    suspend fun getToken(clientId: String, clientSecret: String, code: String): Token? {
-
-        val tokenResponse =
-            safeApiCall(
-                call = {
-                    apiHelper.getToken(
-                        clientId = clientId,
-                        clientSecret = clientSecret,
-                        code = code,
-                    )
-                },
-                errorMessage = "Error Fetching Token",
-            )
-
-        return tokenResponse
-    }
-
-    private suspend fun getTokenOrError(
-        clientId: String,
-        clientSecret: String,
-        code: String,
-    ): EitherResult<UnchainedNetworkException, Token> {
-
-        val tokenResponse =
-            eitherApiResult(
-                call = {
-                    apiHelper.getToken(
-                        clientId = clientId,
-                        clientSecret = clientSecret,
-                        code = code,
-                    )
-                },
-                errorMessage = "Error Fetching Token",
-            )
-
-        return tokenResponse
-    }
+    /** Starts the device-code login flow. */
+    suspend fun startDeviceAuth(appName: String): DeviceAuthStart? =
+        safeApiCall(
+            call = { apiHelper.startDeviceAuth(appName) },
+            errorMessage = "Error Starting Device Authentication",
+        )
 
     /**
-     * Get a new open source Token that usually lasts one hour.
-     *
-     * @param clientId the client id obtained from the /device/credentials endpoint
-     * @param clientSecret the code obtained from the /token endpoint
-     * @param refreshToken the device code obtained from the /device/code endpoint
-     * @return the new Token
+     * Polls for the permanent access token once the user has authorized [deviceCode] on TorBox's
+     * site. Expect [com.github.livingwithhippos.unchained.data.model.TorBoxApiError] with
+     * error "DEVICE_CODE_NOT_USED" while the user hasn't finished yet - keep polling in that case.
      */
-    suspend fun refreshToken(clientId: String, clientSecret: String, refreshToken: String): Token? =
-        getToken(clientId, clientSecret, refreshToken)
-
-    suspend fun refreshTokenWithError(
-        credentials: com.github.livingwithhippos.unchained.data.local.Credentials.CurrentCredential
-    ): EitherResult<UnchainedNetworkException, Token> =
-        getTokenOrError(
-            credentials.clientId!!,
-            credentials.clientSecret!!,
-            credentials.refreshToken!!,
+    suspend fun pollDeviceToken(
+        deviceCode: String
+    ): EitherResult<UnchainedNetworkException, DeviceToken> =
+        eitherApiResult(
+            call = { apiHelper.pollDeviceToken(deviceCode) },
+            errorMessage = "Error Polling Device Token",
         )
 }

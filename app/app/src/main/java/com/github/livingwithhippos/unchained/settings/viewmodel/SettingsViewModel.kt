@@ -9,9 +9,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.github.livingwithhippos.unchained.R
 import com.github.livingwithhippos.unchained.data.local.ProtoStore
-import com.github.livingwithhippos.unchained.data.repository.HostsRepository
 import com.github.livingwithhippos.unchained.data.repository.KodiRepository
 import com.github.livingwithhippos.unchained.data.repository.PluginRepository
+import com.github.livingwithhippos.unchained.data.repository.WebDownloadRepository
 import com.github.livingwithhippos.unchained.settings.view.SettingsFragment.Companion.KEY_THEME_NEW
 import com.github.livingwithhippos.unchained.settings.view.ThemeItem
 import com.github.livingwithhippos.unchained.start.viewmodel.MainActivityViewModel.Companion.KEY_DOWNLOAD_FOLDER
@@ -25,7 +25,7 @@ import kotlinx.coroutines.launch
 class SettingsViewModel
 @Inject
 constructor(
-    private val hostsRepository: HostsRepository,
+    private val webDownloadRepository: WebDownloadRepository,
     private val pluginRepository: PluginRepository,
     private val kodiRepository: KodiRepository,
     private val protoStore: ProtoStore,
@@ -39,10 +39,7 @@ constructor(
     val themeLiveData = MutableLiveData<Event<ThemeItem>>()
 
     fun updateRegexps() {
-        viewModelScope.launch {
-            hostsRepository.updateHostsRegex()
-            hostsRepository.updateFoldersRegex()
-        }
+        viewModelScope.launch { webDownloadRepository.refreshHostsRegex() }
     }
 
     fun removeAllPlugins(context: Context): Int = pluginRepository.removeInstalledPlugins(context)
@@ -66,7 +63,7 @@ constructor(
     fun userLogout() {
         viewModelScope.launch {
             val credentials = protoStore.getCredentials()
-            if (credentials.accessToken.isBlank() && credentials.clientId.isBlank()) {
+            if (credentials.accessToken.isBlank()) {
                 eventLiveData.postEvent(SettingEvent.LogoutNoCredentials)
             } else {
                 protoStore.deleteCredentials()

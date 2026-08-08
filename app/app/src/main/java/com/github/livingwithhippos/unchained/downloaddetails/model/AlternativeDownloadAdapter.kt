@@ -72,9 +72,7 @@ interface DownloadDetailsListener {
 
     fun onOpenTranscodedStream(view: View, url: String)
 
-    fun onLoadStreamsClick(id: String)
-
-    fun onBrowserStreamsClick(id: String)
+    fun onLoadStreamsClick()
 
     fun onDownloadClick(link: String, fileName: String)
 

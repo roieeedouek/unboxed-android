@@ -19,18 +19,16 @@ import androidx.navigation.fragment.findNavController
 import androidx.navigation.fragment.navArgs
 import com.github.livingwithhippos.unchained.R
 import com.github.livingwithhippos.unchained.base.UnchainedFragment
-import com.github.livingwithhippos.unchained.data.model.APIError
 import com.github.livingwithhippos.unchained.data.model.EmptyBodyError
 import com.github.livingwithhippos.unchained.data.model.NetworkError
+import com.github.livingwithhippos.unchained.data.model.TorBoxApiError
 import com.github.livingwithhippos.unchained.databinding.NewDownloadFragmentBinding
 import com.github.livingwithhippos.unchained.lists.view.ListState
 import com.github.livingwithhippos.unchained.newdownload.viewmodel.Link
 import com.github.livingwithhippos.unchained.newdownload.viewmodel.NewDownloadViewModel
 import com.github.livingwithhippos.unchained.statemachine.authentication.FSMAuthenticationEvent
 import com.github.livingwithhippos.unchained.statemachine.authentication.FSMAuthenticationState
-import com.github.livingwithhippos.unchained.utilities.CONTAINER_EXTENSION_PATTERN
 import com.github.livingwithhippos.unchained.utilities.EventObserver
-import com.github.livingwithhippos.unchained.utilities.REMOTE_TRAFFIC_ON
 import com.github.livingwithhippos.unchained.utilities.SCHEME_HTTP
 import com.github.livingwithhippos.unchained.utilities.SCHEME_HTTPS
 import com.github.livingwithhippos.unchained.utilities.SCHEME_MAGNET
@@ -38,17 +36,16 @@ import com.github.livingwithhippos.unchained.utilities.extension.getApiErrorMess
 import com.github.livingwithhippos.unchained.utilities.extension.getClipboardText
 import com.github.livingwithhippos.unchained.utilities.extension.getDownloadedFileUri
 import com.github.livingwithhippos.unchained.utilities.extension.getFileName
-import com.github.livingwithhippos.unchained.utilities.extension.isContainerWebLink
 import com.github.livingwithhippos.unchained.utilities.extension.isMagnet
 import com.github.livingwithhippos.unchained.utilities.extension.isSimpleWebUrl
 import com.github.livingwithhippos.unchained.utilities.extension.isTorrent
 import com.github.livingwithhippos.unchained.utilities.extension.isWebUrl
 import dagger.hilt.android.AndroidEntryPoint
 import java.io.IOException
+import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import timber.log.Timber
-import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * A simple [UnchainedFragment] subclass. Allow the user to create a new download from a link or a
@@ -100,16 +97,15 @@ class NewDownloadFragment : UnchainedFragment() {
             },
         )
 
-        viewModel.folderLiveData.observe(
+        viewModel.webDownloadReadyLiveData.observe(
             viewLifecycleOwner,
-            EventObserver { folder ->
-                // new folder list, alert the list fragment that it needs updating
+            EventObserver { webDownload ->
+                // multi-file result, alert the list fragment that it needs updating
                 activityViewModel.setListState(ListState.UpdateDownload)
                 val action =
                     NewDownloadFragmentDirections.actionNewDownloadDestToFolderListFragment(
-                        folder = folder,
                         torrent = null,
-                        linkList = null,
+                        webDownload = webDownload,
                     )
                 findNavController().navigate(action)
             },
@@ -119,32 +115,14 @@ class NewDownloadFragment : UnchainedFragment() {
             viewLifecycleOwner,
             EventObserver { link ->
                 when (link) {
-                    is Link.Container -> {
-                        // new container, alert the list fragment that it needs updating
-                        activityViewModel.setListState(ListState.UpdateDownload)
-                        val action =
-                            NewDownloadFragmentDirections.actionNewDownloadDestToFolderListFragment(
-                                linkList = link.links.toTypedArray(),
-                                folder = null,
-                                torrent = null,
-                            )
-                        findNavController().navigate(action)
-                    }
-
-                    is Link.RetrievalError -> {
-                        viewModel.postMessage(getString(R.string.error_parsing_container))
-                    }
-
                     is Link.Torrent -> {
                         val action =
                             NewDownloadFragmentDirections
                                 .actionNewDownloadFragmentToTorrentProcessingFragment(
-                                    torrentID = link.upload.id
+                                    torrentID = link.created.torrentId.toString()
                                 )
                         findNavController().navigate(action)
                     }
-
-                    else -> {}
                 }
             },
         )
@@ -167,63 +145,22 @@ class NewDownloadFragment : UnchainedFragment() {
                 enableButtons(binding, true)
 
                 when (exception) {
-                    is APIError -> {
-                        // error codes outside the known range will return unknown error
-                        val errorCode = exception.errorCode ?: -2
-                        val errorMessage = requireContext().getApiErrorMessage(errorCode)
-                        // manage the api error result
-                        when (exception.errorCode) {
-                            -1,
-                            1 -> {
-                                viewModel.postMessage(errorMessage)
-                            }
-                            // since here we monitor new downloads, use a less generic, custom
-                            // message
-                            2 -> viewModel.postMessage(getString(R.string.unsupported_hoster))
-                            in 3..7 -> viewModel.postMessage(errorMessage)
-                            8 -> {
-                                viewModel.postMessage(getString(R.string.refreshing_token))
-                                // try refreshing the token
-                                if (
-                                    activityViewModel.getAuthenticationMachineState()
-                                        is FSMAuthenticationState.AuthenticatedOpenToken
+                    is TorBoxApiError -> {
+                        val errorMessage =
+                            requireContext().getApiErrorMessage(exception.error, exception.detail)
+                        when (exception.error) {
+                            "UNSUPPORTED_SITE" ->
+                                viewModel.postMessage(getString(R.string.error_unsupported_site))
+                            "BAD_TOKEN",
+                            "NO_AUTH",
+                            "AUTH_ERROR" -> {
+                                activityViewModel.transitionAuthenticationMachine(
+                                    FSMAuthenticationEvent.OnNotWorking
                                 )
-                                    activityViewModel.transitionAuthenticationMachine(
-                                        FSMAuthenticationEvent.OnExpiredOpenToken
-                                    )
-                                else
-                                    Timber.e(
-                                        "Asked for a refresh while in a wrong state: ${activityViewModel.getAuthenticationMachineState()}"
-                                    )
                             }
-
-                            in 10..15 -> {
-                                viewModel.postMessage(errorMessage)
-                                when (activityViewModel.getAuthenticationMachineState()) {
-                                    FSMAuthenticationState.AuthenticatedOpenToken,
-                                    FSMAuthenticationState.AuthenticatedPrivateToken,
-                                    FSMAuthenticationState.RefreshingOpenToken -> {
-                                        activityViewModel.transitionAuthenticationMachine(
-                                            FSMAuthenticationEvent.OnAuthenticationError
-                                        )
-                                    }
-
-                                    else -> {
-                                        Timber.e(
-                                            "Asked for logout while in a wrong state: ${activityViewModel.getAuthenticationMachineState()}"
-                                        )
-                                    }
-                                }
-                            }
-
-                            9 -> {
-                                // todo: check if permission denied (code 9) is related only to
-                                // asking for magnet
-                                // without premium or other stuff too
-                                // we use this because permission denied is not clear
+                            "PLAN_RESTRICTED_FEATURE" -> {
                                 viewModel.postMessage(getString(R.string.premium_needed))
                             }
-
                             else -> {
                                 viewModel.postMessage(errorMessage)
                             }
@@ -237,6 +174,10 @@ class NewDownloadFragment : UnchainedFragment() {
                     is NetworkError -> {
                         // todo: alert the user according to the different network error
                         viewModel.postMessage(getString(R.string.network_error))
+                    }
+
+                    else -> {
+                        viewModel.postMessage(getString(R.string.unknown_error))
                     }
                 }
             },
@@ -265,10 +206,7 @@ class NewDownloadFragment : UnchainedFragment() {
         // add the unrestrict button listener
         binding.bUnrestrict.setOnClickListener {
             val authState = activityViewModel.getAuthenticationMachineState()
-            if (
-                authState is FSMAuthenticationState.AuthenticatedPrivateToken ||
-                    authState is FSMAuthenticationState.AuthenticatedOpenToken
-            ) {
+            if (authState is FSMAuthenticationState.Authenticated) {
                 val link: String = binding.tiLink.text.toString().trim()
 
                 val splitLinks: List<String> =
@@ -278,11 +216,7 @@ class NewDownloadFragment : UnchainedFragment() {
                         .map { it.trim() }
                         .filter {
                             it.length > 10 &&
-                                (it.isTorrent() ||
-                                    it.isMagnet() ||
-                                    it.isWebUrl() ||
-                                    it.isSimpleWebUrl() ||
-                                    it.isContainerWebLink())
+                                (it.isTorrent() || it.isMagnet() || it.isWebUrl() || it.isSimpleWebUrl())
                         }
 
                 if (splitLinks.isEmpty()) {
@@ -303,17 +237,6 @@ class NewDownloadFragment : UnchainedFragment() {
                                         link = link
                                     )
                             findNavController().navigate(action)
-
-                            // viewModel.postMessage(getString(R.string.loading_torrent))
-                            // enableButtons(binding, false)
-                            /**
-                             * DownloadManager does not support insecure (https) links anymore to
-                             * add support for it, follow these instructions
-                             * [https://stackoverflow.com/a/50834600] val secureLink = if
-                             * (link.startsWith("http://")) link.replaceFirst( "http:", "https:" )
-                             * else link downloadTorrent(Uri.parse(secureLink))
-                             */
-                            // downloadTorrentToCache(binding, link)
                         }
 
                         link.isMagnet() -> {
@@ -327,10 +250,6 @@ class NewDownloadFragment : UnchainedFragment() {
                                     )
                             findNavController().navigate(action)
                         }
-                        // put this above the web url checks since this is a web link too
-                        link.isContainerWebLink() -> {
-                            viewModel.unrestrictContainer(link)
-                        }
 
                         link.isWebUrl() || link.isSimpleWebUrl() -> {
                             viewModel.postMessage(getString(R.string.loading_host_link))
@@ -342,10 +261,8 @@ class NewDownloadFragment : UnchainedFragment() {
                             // again
                             // you deserve it
                             if (password.isNullOrBlank()) password = null
-                            val remote: Int? =
-                                if (binding.switchRemote.isChecked) REMOTE_TRAFFIC_ON else null
 
-                            viewModel.fetchUnrestrictedLink(link, password, remote)
+                            viewModel.fetchUnrestrictedLink(link, password)
                         }
 
                         else -> {
@@ -367,18 +284,12 @@ class NewDownloadFragment : UnchainedFragment() {
                     return@setOnClickListener
                 }
 
-                viewModel.postMessage(getString(R.string.loading))
-                enableButtons(binding, false)
+                var password: String? = binding.tePassword.text.toString()
+                if (password.isNullOrBlank()) password = null
 
-                // new folder list, alert the list fragment that it needs updating
-                activityViewModel.setListState(ListState.UpdateDownload)
-                val action =
-                    NewDownloadFragmentDirections.actionNewDownloadDestToFolderListFragment(
-                        folder = null,
-                        torrent = null,
-                        linkList = multipleLinks.toTypedArray(),
-                    )
-                findNavController().navigate(action)
+                // each link resolves independently (create+poll+requestdl); fire them off and let
+                // the user check the Downloads tab rather than trying to show them all at once
+                viewModel.submitLinks(multipleLinks, password)
             } else viewModel.postMessage(getString(R.string.premium_needed))
         }
 
@@ -409,11 +320,7 @@ class NewDownloadFragment : UnchainedFragment() {
                 if (uri != null) {
                     val fileName = uri.getFileName(requireContext())
                     if (fileName.endsWith(".torrent", ignoreCase = true)) loadTorrent(binding, uri)
-                    else {
-                        if (CONTAINER_EXTENSION_PATTERN.toRegex().containsMatchIn(fileName))
-                            loadContainer(binding, uri)
-                        else viewModel.postMessage(getString(R.string.unsupported_file))
-                    }
+                    else viewModel.postMessage(getString(R.string.unsupported_file))
                 }
                 /*
                 * if it's null the user didn't pick a file, no message needed
@@ -425,9 +332,7 @@ class NewDownloadFragment : UnchainedFragment() {
 
         binding.bUploadFile.setOnClickListener {
             when (activityViewModel.getAuthenticationMachineState()) {
-                FSMAuthenticationState.AuthenticatedOpenToken,
-                FSMAuthenticationState.AuthenticatedPrivateToken,
-                FSMAuthenticationState.RefreshingOpenToken -> {
+                FSMAuthenticationState.Authenticated -> {
                     filePicker.launch("*/*")
                 }
 
@@ -468,39 +373,21 @@ class NewDownloadFragment : UnchainedFragment() {
                             if (metaCursor.moveToFirst()) {
                                 val fileName = metaCursor.getString(0)
                                 Timber.d("Torrent shared file found: $fileName")
-                                when {
-                                    // check if it's a container
-                                    CONTAINER_EXTENSION_PATTERN.toRegex().matches(fileName) -> {
-                                        handled = true
-                                        loadContainer(binding, link)
-                                    }
-
-                                    fileName.endsWith(".torrent", ignoreCase = true) -> {
-                                        handled = true
-                                        loadTorrent(binding, link)
-                                    }
+                                if (fileName.endsWith(".torrent", ignoreCase = true)) {
+                                    handled = true
+                                    loadTorrent(binding, link)
                                 }
                             }
                         }
 
                     if (!handled) {
-                        when {
-                            // check if it's a container
-                            CONTAINER_EXTENSION_PATTERN.toRegex().matches(link.path ?: "") -> {
-                                loadContainer(binding, link)
-                            }
-
-                            link.path?.endsWith(".torrent", ignoreCase = true) == true -> {
-                                loadTorrent(binding, link)
-                            }
-
-                            else ->
-                                Timber.e(
-                                    "Unsupported content/file passed to NewDownloadFragment: $link"
-                                )
+                        if (link.path?.endsWith(".torrent", ignoreCase = true) == true) {
+                            loadTorrent(binding, link)
+                        } else {
+                            Timber.e(
+                                "Unsupported content/file passed to NewDownloadFragment: $link"
+                            )
                         }
-                    } else {
-                        // do nothing
                     }
                 }
 
@@ -556,35 +443,5 @@ class NewDownloadFragment : UnchainedFragment() {
     private fun enableButtons(binding: NewDownloadFragmentBinding, enabled: Boolean = true) {
         binding.bUnrestrict.isEnabled = enabled
         binding.bUploadFile.isEnabled = enabled
-    }
-
-    private fun loadContainer(binding: NewDownloadFragmentBinding, uri: Uri) {
-        try {
-            viewModel.postMessage(getString(R.string.loading_container_file))
-            requireContext().contentResolver.openInputStream(uri)?.use { inputStream ->
-                val buffer: ByteArray = inputStream.readBytes()
-                viewModel.uploadContainer(buffer)
-            }
-        } catch (exception: Exception) {
-            when (exception) {
-                is java.io.FileNotFoundException -> {
-                    Timber.e("Container conversion: file not found: ${exception.message}")
-                }
-
-                is IOException -> {
-                    Timber.e(
-                        "Container conversion: IOException error getting the file: ${exception.message}"
-                    )
-                }
-
-                else -> {
-                    Timber.e(
-                        "Container conversion: Other error getting the file: ${exception.message}"
-                    )
-                }
-            }
-            enableButtons(binding, true)
-            viewModel.postMessage(getString(R.string.error_loading_file))
-        }
     }
 }

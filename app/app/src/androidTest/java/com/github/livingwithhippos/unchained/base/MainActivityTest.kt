@@ -18,8 +18,8 @@ import org.junit.runner.RunWith
 
 /**
  * Test setup: run this once and then edit the generated configuration:
- * 1. Add your private token as an Instrumentation argument called TOKEN (maybe don't use your main
- *    account)
+ * 1. Add your TorBox API key (from https://torbox.app/settings) as an Instrumentation argument
+ *    called TOKEN (maybe don't use your main account)
  * 2. Add in the before launch an adb clear data to remove previous logins etc. Select adb as
  *    executable and add the parameters "shell pm clear com.github.livingwithhippos.unchained.debug"
  */

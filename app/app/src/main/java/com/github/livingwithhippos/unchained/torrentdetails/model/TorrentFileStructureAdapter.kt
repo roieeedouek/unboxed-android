@@ -14,7 +14,7 @@ import com.github.livingwithhippos.unchained.utilities.Node
 import com.github.livingwithhippos.unchained.utilities.extension.getFileSizeString
 
 data class TorrentFileItem(
-    val id: Int,
+    val id: Long,
     val absolutePath: String,
     val bytes: Long,
     var selected: Boolean,
@@ -29,29 +29,32 @@ data class TorrentFileItem(
     }
 
     override fun hashCode(): Int {
-        var result = id
+        var result = id.hashCode()
         result = 31 * result + absolutePath.hashCode()
         result = 31 * result + name.hashCode()
         return result
     }
 
     companion object {
-        const val TYPE_FOLDER = -1
+        const val TYPE_FOLDER = -1L
     }
 }
 
+/**
+ * Builds a directory tree out of a torrent's file list. TorBox has no server-side file-selection
+ * step (every file downloads automatically), so [TorrentFileItem.selected] is purely a client-side
+ * UI concept now, tracked by the caller (see [selectedIds]) rather than read off the API response.
+ */
 fun getFilesNodes(
     item: TorrentItem,
-    selectedOnly: Boolean = false,
+    selectedIds: Set<Long> = emptySet(),
     flattenFolders: Boolean = false,
 ): Node<TorrentFileItem> {
     val rootFolder = Node(TorrentFileItem(TYPE_FOLDER, "", 0, selected = false, "/"))
 
     if (!item.files.isNullOrEmpty()) {
-        val files = if (selectedOnly) item.files.filter { it.selected == 1 } else item.files
-        for (file in files) {
-            val paths = file.path.split("/").drop(1)
-            // todo: just use InnerTorrentFile instead of TorrentFileItem
+        for (file in item.files) {
+            val paths = file.name.split("/")
             var currentNode = rootFolder
             paths.forEachIndexed { index, value ->
                 if (index == paths.lastIndex) {
@@ -61,8 +64,8 @@ fun getFilesNodes(
                             TorrentFileItem(
                                 file.id,
                                 paths.dropLast(1).joinToString("/"),
-                                file.bytes,
-                                selected = file.selected == 1,
+                                file.size,
+                                selected = file.id in selectedIds,
                                 value,
                             )
                         )

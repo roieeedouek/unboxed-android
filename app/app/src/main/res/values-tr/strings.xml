@@ -15,7 +15,6 @@
     <string name="link_loaded">Yetkilendirme bağlantısı yüklendi</string>
     <string name="premium">Premium</string>
     <string name="not_premium">Premium Değil</string>
-    <string name="premium_points_format">Premium Puanlar: %1$d/1000</string>
     <string name="premium_days_format">Kalan günler: %1$d</string>
     <string name="user">Kullanıcı</string>
     <string name="new_download">Yeni İndirme</string>
@@ -48,7 +47,7 @@
     <string name="load_streams">Akışları yükle</string>
     <string name="quality">Kalite</string>
     <string name="links">Bağlantılar</string>
-    <string name="add_private_token_message">https://real-debrid.com/apitoken adresinden özel API jetonunuzu kullanabilirsiniz; bu, akış gibi tüm işlevleri kullanmanıza olanak tanır.</string>
+    <string name="add_private_token_message">https://torbox.app/settings adresinden aldığınız API anahtarınızı buraya doğrudan da yapıştırabilirsiniz.</string>
     <string name="add_private_token">Özel Jeton Ekle</string>
     <string name="save">Kaydet</string>
     <string name="private_token">Özel Jeton</string>
@@ -59,17 +58,11 @@
     <string name="error_loading_torrent">Torrent yüklenmedi</string>
     <string name="link_or_magnet">Bağlantı veya Magnet</string>
     <string name="status">Durum</string>
-    <string name="magnet_error">Magnet Hatası</string>
-    <string name="magnet_conversion">Magnet Dönüşümü</string>
-    <string name="waiting_files_selection">Dosya seçimi bekleniyor</string>
     <string name="queued">Sıraya alındı</string>
     <string name="downloading">İndiriliyor</string>
     <string name="downloaded">İndirildi</string>
     <string name="error">Hata</string>
-    <string name="virus">Virüs</string>
-    <string name="compressing">Sıkıştırılıyor</string>
     <string name="uploading">Yükleniyor</string>
-    <string name="dead">Ölü</string>
     <string name="download">İndir</string>
     <string name="lists">Listeler</string>
     <string name="torrent">Torrent</string>
@@ -83,50 +76,17 @@
     <string name="details">Ayrıntılar</string>
     <string name="file_id_format">Kimlik: %1$s</string>
     <string name="file_type_format">Tür: %1$s</string>
-    <string name="rd_settings_link_description">Hesap sayfanızdan kullanıcı ayarlarınızı, premium durumunuzu ve puanlarınızı dönüştürebilirsiniz.</string>
+    <string name="rd_settings_link_description">TorBox hesap sayfanızdan kullanıcı ayarlarınızı ve abonelik planınızı yönetebilirsiniz.</string>
     <string name="settings">Ayarlar</string>
     <string name="content_description_settings">Uygulama için ayarlar</string>
     <string name="about">Hakkında</string>
     <string name="content_description_about">Uygulama hakkında ayrıntılar</string>
     <string name="error_unrestricting_download">İndirme kısıtlaması kaldırılırken hata oluştu</string>
-    <string name="internal_error">Dahili hata</string>
-    <string name="bad_parameter_value">Geçersiz parametre değeri</string>
     <string name="missing_parameter">Eksik parametre</string>
-    <string name="unknown_method">Bilinmeyen yöntem</string>
-    <string name="method_not_allowed">Yönteme izin verilmiyor</string>
-    <string name="slow_down">Yavaşla</string>
-    <string name="resource_unreachable">Kaynağa ulaşılamıyor</string>
-    <string name="resource_not_found">Kaynak bulunamadı</string>
-    <string name="bad_token">Geçersiz jeton</string>
-    <string name="permission_denied">İzin reddedildi</string>
-    <string name="tfa_needed">İki Faktörlü Kimlik Doğrulama gerekli</string>
-    <string name="tfa_pending">İki Faktörlü Kimlik Doğrulama beklemede</string>
-    <string name="invalid_login">Geçersiz oturum açma</string>
-    <string name="invalid_password">Geçersiz parola</string>
-    <string name="account_locked">Hesap kilitli</string>
-    <string name="account_not_activated">Hesap etkinleştirilmedi</string>
-    <string name="unsupported_hoster">Desteklenmeyen barındırıcı</string>
-    <string name="hoster_in_maintenance">Barındırıcı bakımda</string>
-    <string name="hoster_limit_reached">Barındırıcı sınırı aşıldı</string>
-    <string name="hoster_temporarily_unavailable">Barındırıcı geçici olarak kullanılamıyor</string>
-    <string name="hoster_not_available_for_free_users">Barındırıcı ücretsiz kullanıcılar için kullanılamıyor</string>
-    <string name="too_many_active_downloads">Çok fazla aktif indirme</string>
-    <string name="ip_Address_not_allowed">IP Adresi izin verilmiyor</string>
-    <string name="traffic_exhausted">Trafik tükenmiş</string>
-    <string name="file_unavailable">Dosya kullanılamıyor</string>
-    <string name="service_unavailable">Servis kullanılamıyor</string>
-    <string name="upload_too_big">Yükleme çok büyük</string>
-    <string name="upload_error">Yükleme hatası</string>
-    <string name="file_not_allowed">Dosyaya izin verilmiyor</string>
-    <string name="torrent_too_big">Torrent çok büyük</string>
-    <string name="torrent_file_invalid">Geçersiz torrent dosyası</string>
-    <string name="action_already_done">Eylem zaten gerçekleştirildi</string>
-    <string name="image_resolution_error">Görüntü çözünürlüğü hatası</string>
-    <string name="torrent_already_active">Torrent zaten aktif</string>
     <string name="logout">Oturumu Kapat</string>
     <string name="account_page">Hesap Sayfası</string>
-    <string name="login_type_open">Açık jeton ile oturum açıldı. Kod dönüştürme gibi bazı özellikler kullanılamıyor.</string>
-    <string name="login_type_private">Özel jeton ile oturum açıldı. Tüm özellikler kullanılabilir.</string>
+    <string name="login_type_open">TorBox cihaz girişi akışıyla oturum açıldı.</string>
+    <string name="login_type_private">Bir TorBox API anahtarı yapıştırılarak oturum açıldı.</string>
     <string name="api_needs_private_token">Bu işlev için özel bir API jetonu gereklidir</string>
     <string name="torrents">Torrentler</string>
     <string name="downloads">İndirmeler</string>
@@ -145,7 +105,7 @@
                     Çeşitli projeler, kaynaklar ve kişiler bu uygulamanın oluşturulmasında yardımcı oldu. Teşekkürler:
                     <br>
                     <ul>
-                    <li> Real Debrid ekibine tüm çalışmaları için </li>
+                    <li> Tüm çalışmaları için TorBox ekibine </li>
                     <li> @oathzed\'e uygulamanın her detayını test ettiği için </li>
                     <li> rawpixel.com\'a logo ve semboller için ilham veren <a href="https://www.rawpixel.com/image/843352/minimal-logo-designs-set" target="_blank" rel="noopener noreferrer">minimal logo tasarım seti</a> için </li>
                     </ul>
@@ -319,7 +279,7 @@
     <string name="kodi_remote_control">Kodi uzaktan kontrol talimatları</string>
     <string name="enable_kodi_control">Kodi\'yi uzaktan kontrol için ayarlamak için talimatlar için buraya dokunun (genellikle sistem->hizmetler->kontrol altında etkinleştirilir)</string>
     <string name="only_if_auth">Yalnızca Kodi\'de kimlik doğrulama etkinleştirilmişse gereklidir</string>
-    <string name="rd_status">Real Debrid durumu</string>
+    <string name="rd_status">TorBox durumu</string>
     <string name="show_kodi">Kodi düğmesini göster</string>
     <string name="only_big_files">Yalnızca büyük dosyalar</string>
     <string name="filter_type">Yalnızca medya dosyaları</string>
@@ -336,7 +296,7 @@
     <string name="unsupported_file">Dosya desteklenmiyor</string>
     <string name="hoster">Barındırıcı</string>
     <string name="retry_login">Tekrar dene</string>
-    <string name="generic_login_error">Oturum açma sırasında bir hata oluştu. Bağlantınızı kontrol edebilir, bir süre sonra tekrar deneyebilir veya daha fazla bilgi için real-debrid.com\'dan oturum açabilirsiniz.</string>
+    <string name="generic_login_error">Oturum açma sırasında bir hata oluştu. Bağlantınızı kontrol edebilir, bir süre sonra tekrar deneyebilir veya daha fazla bilgi için torbox.app adresine bakabilirsiniz.</string>
     <string name="retry_later">Daha sonra tekrar dene</string>
     <string name="content_description_plugins_link">Eklenti sayfasına bağlantı</string>
     <string name="get_plugins">Daha fazla eklenti al</string>
@@ -362,7 +322,7 @@
     <string name="new_string">Yeni</string>
     <string name="select_deselect_all">Tümünü seç veya seçimi kaldır</string>
     <string name="select_one_item">En az bir öğe seçin</string>
-    <string name="torrent_monitoring_description">Real-Debrid sunucularında indirilen torrentlerinizi izleyin.</string>
+    <string name="torrent_monitoring_description">TorBox sunucularında indirilen torrentlerinizi izleyin.</string>
     <string name="kodi_manage_list">Kodi Cihazlarını Yönet</string>
     <string name="kodi_manage_list_summary">Bir Kodi cihazına bağlantı ekleyin veya düzenleyin ve varsayılan olanı seçin.</string>
     <string name="add_device">Cihaz Ekle</string>

@@ -1,146 +1,218 @@
 package com.github.livingwithhippos.unchained.data.repository
 
+import android.os.SystemClock
+import android.util.LruCache
 import com.github.livingwithhippos.unchained.data.local.ProtoStore
-import com.github.livingwithhippos.unchained.data.model.AvailableHost
+import com.github.livingwithhippos.unchained.data.model.CreatedTorrent
+import com.github.livingwithhippos.unchained.data.model.DownloadItem
+import com.github.livingwithhippos.unchained.data.model.InnerTorrentFile
+import com.github.livingwithhippos.unchained.data.model.ItemControlRequest
 import com.github.livingwithhippos.unchained.data.model.TorrentItem
+import com.github.livingwithhippos.unchained.data.model.TorrentOperation
 import com.github.livingwithhippos.unchained.data.model.UnchainedNetworkException
-import com.github.livingwithhippos.unchained.data.model.UploadedTorrent
+import com.github.livingwithhippos.unchained.data.remote.StreamContentType
 import com.github.livingwithhippos.unchained.data.remote.TorrentApiHelper
 import com.github.livingwithhippos.unchained.utilities.EitherResult
 import javax.inject.Inject
+import kotlin.time.Duration.Companion.milliseconds
+import kotlinx.coroutines.delay
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.MultipartBody
 import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
-import timber.log.Timber
 
 class TorrentsRepository
 @Inject
 constructor(protoStore: ProtoStore, private val torrentApiHelper: TorrentApiHelper) :
     BaseRepository(protoStore) {
 
-    suspend fun getAvailableHosts(): List<AvailableHost>? {
-        val token = getToken()
-        val hostResponse: List<AvailableHost>? =
-            safeApiCall(
-                call = { torrentApiHelper.getAvailableHosts(token = "Bearer $token") },
-                errorMessage = "Error Retrieving Available Hosts",
-            )
+    private val downloadLinkCache =
+        LruCache<DownloadLinkCacheKey, CachedDownloadLink>(DOWNLOAD_LINK_CACHE_MAX_ENTRIES)
 
-        return hostResponse
+    /**
+     * Creates a torrent from either a magnet link or a .torrent file's bytes. Unlike RD, TorBox
+     * has no "host" concept to pick, and every file downloads automatically - there's no
+     * subsequent file-selection call to make.
+     */
+    suspend fun createTorrent(
+        magnet: String? = null,
+        torrentFile: ByteArray? = null,
+        fileName: String? = null,
+    ): EitherResult<UnchainedNetworkException, CreatedTorrent> {
+        val token = getToken()
+
+        val filePart: MultipartBody.Part? =
+            torrentFile?.let {
+                val body = it.toRequestBody("application/x-bittorrent".toMediaType(), 0, it.size)
+                MultipartBody.Part.createFormData("file", fileName ?: "torrent.torrent", body)
+            }
+        val magnetPart: RequestBody? = magnet?.toRequestBody("text/plain".toMediaTypeOrNull())
+        val namePart: RequestBody? = fileName?.toRequestBody("text/plain".toMediaTypeOrNull())
+
+        return eitherApiResult(
+            call = {
+                torrentApiHelper.createTorrent(
+                    token = "Bearer $token",
+                    file = filePart,
+                    magnet = magnetPart,
+                    name = namePart,
+                )
+            },
+            errorMessage = "Error Creating Torrent",
+        )
     }
 
-    suspend fun getTorrentInfo(id: String): TorrentItem? {
+    suspend fun getTorrentInfo(id: Long): TorrentItem? {
         val token = getToken()
-        val torrentResponse: TorrentItem? =
-            safeApiCall(
-                call = { torrentApiHelper.getTorrentInfo(token = "Bearer $token", id = id) },
-                errorMessage = "Error Retrieving Torrent Info",
-            )
-
-        return torrentResponse
+        return safeApiCall(
+            call = { torrentApiHelper.getTorrentInfo(token = "Bearer $token", id = id) },
+            errorMessage = "Error Retrieving Torrent Info",
+        )
     }
 
-    suspend fun addTorrent(
-        binaryTorrent: ByteArray,
-        host: String,
-    ): EitherResult<UnchainedNetworkException, UploadedTorrent> {
+    suspend fun getTorrentsList(offset: Int? = null, limit: Int? = null): List<TorrentItem> {
         val token = getToken()
-
-        val requestBody: RequestBody =
-            binaryTorrent.toRequestBody(
-                "application/octet-stream".toMediaTypeOrNull(),
-                0,
-                binaryTorrent.size,
-            )
-
-        val addTorrentResponse =
-            eitherApiResult(
-                call = {
-                    torrentApiHelper.addTorrent(
-                        token = "Bearer $token",
-                        binaryTorrent = requestBody,
-                        host = host,
-                    )
-                },
-                errorMessage = "Error Uploading Torrent",
-            )
-
-        return addTorrentResponse
-    }
-
-    suspend fun addMagnet(
-        magnet: String,
-        host: String,
-    ): EitherResult<UnchainedNetworkException, UploadedTorrent> {
-        val token = getToken()
-        val torrentResponse =
-            eitherApiResult(
-                call = {
-                    torrentApiHelper.addMagnet(
-                        token = "Bearer $token",
-                        magnet = magnet,
-                        host = host,
-                    )
-                },
-                errorMessage = "Error Uploading Torrent From Magnet",
-            )
-
-        return torrentResponse
-    }
-
-    suspend fun getTorrentsList(
-        offset: Int? = null,
-        page: Int? = 1,
-        limit: Int? = 50,
-        filter: String? = null,
-    ): List<TorrentItem> {
-        val token = getToken()
-
-        val torrentsResponse: List<TorrentItem>? =
+        val torrentsResponse =
             safeApiCall(
                 call = {
                     torrentApiHelper.getTorrentsList(
                         token = "Bearer $token",
                         offset = offset,
-                        page = page,
                         limit = limit,
-                        filter = filter,
                     )
                 },
                 errorMessage = "Error retrieving the torrents List, or list empty",
             )
-
         return torrentsResponse ?: emptyList()
     }
 
-    suspend fun selectFiles(
-        id: String,
-        files: String = "all",
-    ): EitherResult<UnchainedNetworkException, Unit> {
+    suspend fun deleteTorrent(id: Long): EitherResult<UnchainedNetworkException, Unit> {
         val token = getToken()
-
-        Timber.d("Selecting files for torrent: $id")
-        // this call has no return type
         val response =
-            eitherApiResult(
+            eitherApiResultUnit(
                 call = {
-                    torrentApiHelper.selectFiles(token = "Bearer $token", id = id, files = files)
+                    torrentApiHelper.controlTorrent(
+                        token = "Bearer $token",
+                        body = ItemControlRequest(torrentId = id, operation = TorrentOperation.DELETE),
+                    )
                 },
-                errorMessage = "Error Selecting Torrent Files",
+                errorMessage = "Error deleting Torrent",
             )
-
+        if (response is EitherResult.Success) clearDownloadLinkCache()
         return response
     }
 
-    suspend fun deleteTorrent(id: String): EitherResult<UnchainedNetworkException, Unit> {
+    suspend fun controlTorrent(
+        id: Long,
+        operation: String,
+    ): EitherResult<UnchainedNetworkException, Unit> {
         val token = getToken()
+        return eitherApiResultUnit(
+            call = {
+                torrentApiHelper.controlTorrent(
+                    token = "Bearer $token",
+                    body = ItemControlRequest(torrentId = id, operation = operation),
+                )
+            },
+            errorMessage = "Error Controlling Torrent",
+        )
+    }
 
+    /**
+     * Mints a direct download link for one file of a torrent (or a zip of all its files if
+     * [zipLink] is true), returning it wrapped in a locally-built [DownloadItem]. TorBox has no
+     * server-side file-selection step, so this is called on demand for whichever file(s) the user
+     * actually wants a link for. Results are cached for a couple hours since `requestdl` calls are
+     * billable, same as RD's unrestrict was.
+     */
+    suspend fun getDownloadLink(
+        torrentId: Long,
+        fileId: Long?,
+        zipLink: Boolean = false,
+        file: InnerTorrentFile? = null,
+    ): EitherResult<UnchainedNetworkException, DownloadItem> {
+        val cacheKey = DownloadLinkCacheKey(torrentId, fileId, zipLink)
+        getCachedDownloadLink(cacheKey)?.let {
+            return EitherResult.Success(it)
+        }
+
+        val token = getToken()
         val response =
             eitherApiResult(
-                call = { torrentApiHelper.deleteTorrent(token = "Bearer $token", id = id) },
-                errorMessage = "Error deleting Torrent",
+                call = {
+                    torrentApiHelper.requestDownloadLink(
+                        apiKey = token,
+                        torrentId = torrentId,
+                        fileId = fileId,
+                        zipLink = zipLink,
+                    )
+                },
+                errorMessage = "Error Requesting Torrent Download Link",
             )
 
-        return response
+        return when (response) {
+            is EitherResult.Success -> {
+                val item =
+                    buildDownloadItem(
+                        id = "torrent:$torrentId:${fileId ?: "zip"}",
+                        contentId = torrentId,
+                        fileId = fileId ?: 0L,
+                        contentType = StreamContentType.TORRENT,
+                        file = file,
+                        link = response.success,
+                        host = "torbox.app",
+                    )
+                cacheDownloadLink(cacheKey, item)
+                EitherResult.Success(item)
+            }
+            is EitherResult.Failure -> response
+        }
+    }
+
+    suspend fun getDownloadLinkList(
+        items: List<Triple<Long, Long?, InnerTorrentFile?>>,
+        callDelay: Long = 100,
+    ): List<EitherResult<UnchainedNetworkException, DownloadItem>> {
+        val results = mutableListOf<EitherResult<UnchainedNetworkException, DownloadItem>>()
+        items.forEach { (torrentId, fileId, file) ->
+            results.add(getDownloadLink(torrentId = torrentId, fileId = fileId, file = file))
+            delay(callDelay.milliseconds)
+        }
+        return results
+    }
+
+    fun clearDownloadLinkCache() {
+        synchronized(downloadLinkCache) { downloadLinkCache.evictAll() }
+    }
+
+    private fun cacheDownloadLink(key: DownloadLinkCacheKey, item: DownloadItem) {
+        synchronized(downloadLinkCache) {
+            downloadLinkCache.put(
+                key,
+                CachedDownloadLink(item = item, createdAtElapsedRealtime = SystemClock.elapsedRealtime()),
+            )
+        }
+    }
+
+    private fun getCachedDownloadLink(key: DownloadLinkCacheKey): DownloadItem? =
+        synchronized(downloadLinkCache) {
+            val cached = downloadLinkCache.get(key) ?: return@synchronized null
+            val cacheAge = SystemClock.elapsedRealtime() - cached.createdAtElapsedRealtime
+            if (cacheAge <= DOWNLOAD_LINK_CACHE_TTL_MS) {
+                cached.item
+            } else {
+                downloadLinkCache.remove(key)
+                null
+            }
+        }
+
+    private data class DownloadLinkCacheKey(val id: Long, val fileId: Long?, val zipLink: Boolean)
+
+    private data class CachedDownloadLink(val item: DownloadItem, val createdAtElapsedRealtime: Long)
+
+    companion object {
+        private const val DOWNLOAD_LINK_CACHE_MAX_ENTRIES = 5000
+        private const val DOWNLOAD_LINK_CACHE_TTL_MS = 2 * 60 * 60 * 1000L
     }
 }

@@ -66,7 +66,7 @@
             android:layout_marginBottom="5dp"
             android:hint="@string/password_optional"
             app:endIconMode="password_toggle"
-            app:layout_constraintBottom_toTopOf="@+id/switchRemote"
+            app:layout_constraintBottom_toTopOf="@+id/bUnrestrict"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintEnd_toStartOf="@+id/bPastePassword"
             app:layout_constraintHorizontal_bias="0.5"
@@ -99,19 +99,6 @@
             app:layout_constraintStart_toEndOf="@+id/tiPassword"
             app:layout_constraintTop_toTopOf="@id/tiPassword" />
 
-        <com.google.android.material.materialswitch.MaterialSwitch
-            android:id="@+id/switchRemote"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="5dp"
-            android:checked="false"
-            android:text="@string/remote_traffic"
-            app:layout_constraintBottom_toTopOf="@+id/bUnrestrict"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintHorizontal_bias="0.5"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@+id/tiPassword" />
-
         <Button
             android:id="@+id/bUnrestrict"
             android:layout_width="wrap_content"
@@ -124,7 +111,7 @@
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintHorizontal_bias="0.502"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@+id/switchRemote" />
+            app:layout_constraintTop_toBottomOf="@+id/tiPassword" />
 
         <com.google.android.material.divider.MaterialDivider
             android:id="@+id/divider"

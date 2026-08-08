@@ -90,14 +90,14 @@ constructor(protoStore: ProtoStore, private val customDownloadHelper: CustomDown
         link: String
     ): EitherResult<UnchainedNetworkException, JsonPluginRepository> {
 
-        return eitherApiResult(
+        return eitherApiResultRaw(
             call = { customDownloadHelper.getPluginsRepository(link) },
             errorMessage = "Error Fetching plugins repository",
         )
     }
 
     suspend fun downloadPlugin(link: String): EitherResult<UnchainedNetworkException, Plugin> {
-        return eitherApiResult(
+        return eitherApiResultRaw(
             call = { customDownloadHelper.getPlugin(link) },
             errorMessage = "Error fetching plugin",
         )
@@ -110,7 +110,7 @@ constructor(protoStore: ProtoStore, private val customDownloadHelper: CustomDown
      * @return
      */
     suspend fun downloadAsString(url: String): EitherResult<UnchainedNetworkException, String> {
-        return eitherApiResult(
+        return eitherApiResultRaw(
             call = { customDownloadHelper.getAsString(url) },
             errorMessage = "Error fetching url as a string",
         )

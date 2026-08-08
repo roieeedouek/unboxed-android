@@ -25,18 +25,16 @@ import com.github.livingwithhippos.unchained.data.local.ProtoStore
 import com.github.livingwithhippos.unchained.data.local.RemoteDevice
 import com.github.livingwithhippos.unchained.data.local.RemoteService
 import com.github.livingwithhippos.unchained.data.local.RemoteServiceType
-import com.github.livingwithhippos.unchained.data.model.APIError
 import com.github.livingwithhippos.unchained.data.model.ApiConversionError
 import com.github.livingwithhippos.unchained.data.model.DownloadItem
 import com.github.livingwithhippos.unchained.data.model.EmptyBodyError
 import com.github.livingwithhippos.unchained.data.model.NetworkError
+import com.github.livingwithhippos.unchained.data.model.TorBoxApiError
 import com.github.livingwithhippos.unchained.data.model.TorrentItem
 import com.github.livingwithhippos.unchained.data.model.UnchainedNetworkException
 import com.github.livingwithhippos.unchained.data.model.User
 import com.github.livingwithhippos.unchained.data.model.UserAction
-import com.github.livingwithhippos.unchained.data.repository.AuthenticationRepository
 import com.github.livingwithhippos.unchained.data.repository.CustomDownloadRepository
-import com.github.livingwithhippos.unchained.data.repository.HostsRepository
 import com.github.livingwithhippos.unchained.data.repository.InstallResult
 import com.github.livingwithhippos.unchained.data.repository.KodiDeviceRepository
 import com.github.livingwithhippos.unchained.data.repository.PluginRepository
@@ -45,16 +43,16 @@ import com.github.livingwithhippos.unchained.data.repository.RemoteDeviceReposit
 import com.github.livingwithhippos.unchained.data.repository.TorrentsRepository
 import com.github.livingwithhippos.unchained.data.repository.UpdateRepository
 import com.github.livingwithhippos.unchained.data.repository.UserRepository
-import com.github.livingwithhippos.unchained.data.repository.VariousApiRepository
+import com.github.livingwithhippos.unchained.data.repository.WebDownloadRepository
 import com.github.livingwithhippos.unchained.lists.view.ListState
 import com.github.livingwithhippos.unchained.statemachine.authentication.CurrentFSMAuthentication
 import com.github.livingwithhippos.unchained.statemachine.authentication.FSMAuthenticationEvent
 import com.github.livingwithhippos.unchained.statemachine.authentication.FSMAuthenticationSideEffect
 import com.github.livingwithhippos.unchained.statemachine.authentication.FSMAuthenticationState
+import com.github.livingwithhippos.unchained.utilities.AUTH_METHOD_MANUAL
 import com.github.livingwithhippos.unchained.utilities.EitherResult
 import com.github.livingwithhippos.unchained.utilities.Event
 import com.github.livingwithhippos.unchained.utilities.MAGNET_PATTERN
-import com.github.livingwithhippos.unchained.utilities.PRIVATE_TOKEN
 import com.github.livingwithhippos.unchained.utilities.PreferenceKeys
 import com.github.livingwithhippos.unchained.utilities.SIGNATURE
 import com.github.livingwithhippos.unchained.utilities.download.DownloadWorker
@@ -69,10 +67,8 @@ import java.util.regex.Matcher
 import java.util.regex.Pattern
 import javax.inject.Inject
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.firstOrNull
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import kotlin.time.Duration.Companion.milliseconds
@@ -88,10 +84,8 @@ constructor(
     private val savedStateHandle: SavedStateHandle,
     private val preferences: SharedPreferences,
     private val protoStore: ProtoStore,
-    private val authRepository: AuthenticationRepository,
     private val userRepository: UserRepository,
-    private val variousApiRepository: VariousApiRepository,
-    private val hostsRepository: HostsRepository,
+    private val webDownloadRepository: WebDownloadRepository,
     private val pluginRepository: PluginRepository,
     private val kodiDeviceRepository: KodiDeviceRepository,
     private val customDownloadRepository: CustomDownloadRepository,
@@ -127,8 +121,6 @@ constructor(
 
     private val workManager = WorkManager.getInstance(applicationContext)
 
-    private var refreshJob: Job? = null
-
     private val authStateMachine:
         StateMachine<FSMAuthenticationState, FSMAuthenticationEvent, FSMAuthenticationSideEffect> =
         StateMachine.create {
@@ -150,22 +142,10 @@ constructor(
             }
 
             state<FSMAuthenticationState.CheckCredentials> {
-                on<FSMAuthenticationEvent.OnWorkingOpenToken> {
+                on<FSMAuthenticationEvent.OnWorking> {
                     transitionTo(
-                        FSMAuthenticationState.AuthenticatedOpenToken,
-                        FSMAuthenticationSideEffect.PostAuthenticatedOpen,
-                    )
-                }
-                on<FSMAuthenticationEvent.OnExpiredOpenToken> {
-                    transitionTo(
-                        FSMAuthenticationState.RefreshingOpenToken,
-                        FSMAuthenticationSideEffect.PostRefreshingToken,
-                    )
-                }
-                on<FSMAuthenticationEvent.OnWorkingPrivateToken> {
-                    transitionTo(
-                        FSMAuthenticationState.AuthenticatedPrivateToken,
-                        FSMAuthenticationSideEffect.PostAuthenticatedPrivate,
+                        FSMAuthenticationState.Authenticated,
+                        FSMAuthenticationSideEffect.PostAuthenticated,
                     )
                 }
                 on<FSMAuthenticationEvent.OnNotWorking> {
@@ -204,8 +184,8 @@ constructor(
                         FSMAuthenticationSideEffect.PostWaitUserConfirmation,
                     )
                 }
-                // I can get a private token on this state too
-                on<FSMAuthenticationEvent.OnPrivateToken> {
+                // a token was just pasted manually, go verify it
+                on<FSMAuthenticationEvent.OnTokenSaved> {
                     transitionTo(
                         FSMAuthenticationState.CheckCredentials,
                         FSMAuthenticationSideEffect.CheckingCredentials,
@@ -220,20 +200,14 @@ constructor(
                         FSMAuthenticationSideEffect.PostNewLogin,
                     )
                 }
-                on<FSMAuthenticationEvent.OnUserConfirmationLoaded> {
-                    transitionTo(
-                        FSMAuthenticationState.WaitingToken,
-                        FSMAuthenticationSideEffect.PostWaitToken,
-                    )
-                }
                 on<FSMAuthenticationEvent.OnUserConfirmationMissing> {
                     transitionTo(
                         FSMAuthenticationState.WaitingUserConfirmation,
                         FSMAuthenticationSideEffect.PostWaitUserConfirmation,
                     )
                 }
-                // I can get a private token on this state too
-                on<FSMAuthenticationEvent.OnPrivateToken> {
+                // the device-code poll obtained a token, or the user pasted one manually
+                on<FSMAuthenticationEvent.OnTokenSaved> {
                     transitionTo(
                         FSMAuthenticationState.CheckCredentials,
                         FSMAuthenticationSideEffect.CheckingCredentials,
@@ -241,29 +215,7 @@ constructor(
                 }
             }
 
-            state<FSMAuthenticationState.WaitingToken> {
-                on<FSMAuthenticationEvent.OnOpenTokenLoaded> {
-                    transitionTo(
-                        FSMAuthenticationState.CheckCredentials,
-                        FSMAuthenticationSideEffect.CheckingCredentials,
-                    )
-                }
-                // I can get a private token on this state too
-                on<FSMAuthenticationEvent.OnPrivateToken> {
-                    transitionTo(
-                        FSMAuthenticationState.CheckCredentials,
-                        FSMAuthenticationSideEffect.CheckingCredentials,
-                    )
-                }
-            }
-
-            state<FSMAuthenticationState.AuthenticatedOpenToken> {
-                on<FSMAuthenticationEvent.OnExpiredOpenToken> {
-                    transitionTo(
-                        FSMAuthenticationState.RefreshingOpenToken,
-                        FSMAuthenticationSideEffect.PostRefreshingToken,
-                    )
-                }
+            state<FSMAuthenticationState.Authenticated> {
                 on<FSMAuthenticationEvent.OnAuthenticationError> {
                     transitionTo(
                         FSMAuthenticationState.WaitingUserAction(null),
@@ -274,48 +226,6 @@ constructor(
                     transitionTo(
                         FSMAuthenticationState.StartNewLogin,
                         FSMAuthenticationSideEffect.PostNewLogin,
-                    )
-                }
-            }
-
-            state<FSMAuthenticationState.RefreshingOpenToken> {
-                on<FSMAuthenticationEvent.OnRefreshed> {
-                    transitionTo(
-                        FSMAuthenticationState.AuthenticatedOpenToken,
-                        FSMAuthenticationSideEffect.PostAuthenticatedOpen,
-                    )
-                }
-                on<FSMAuthenticationEvent.OnLogout> {
-                    transitionTo(
-                        FSMAuthenticationState.StartNewLogin,
-                        FSMAuthenticationSideEffect.PostNewLogin,
-                    )
-                }
-                on<FSMAuthenticationEvent.OnAuthenticationError> {
-                    transitionTo(
-                        FSMAuthenticationState.WaitingUserAction(null),
-                        FSMAuthenticationSideEffect.PostActionNeeded,
-                    )
-                }
-                on<FSMAuthenticationEvent.OnNotWorking> {
-                    transitionTo(
-                        FSMAuthenticationState.StartNewLogin,
-                        FSMAuthenticationSideEffect.ResetAuthentication,
-                    )
-                }
-            }
-
-            state<FSMAuthenticationState.AuthenticatedPrivateToken> {
-                on<FSMAuthenticationEvent.OnLogout> {
-                    transitionTo(
-                        FSMAuthenticationState.StartNewLogin,
-                        FSMAuthenticationSideEffect.PostNewLogin,
-                    )
-                }
-                on<FSMAuthenticationEvent.OnAuthenticationError> {
-                    transitionTo(
-                        FSMAuthenticationState.WaitingUserAction(null),
-                        FSMAuthenticationSideEffect.PostActionNeeded,
                     )
                 }
             }
@@ -339,23 +249,8 @@ constructor(
                             Event(FSMAuthenticationState.StartNewLogin)
                         )
                     }
-                    FSMAuthenticationSideEffect.PostAuthenticatedOpen -> {
-                        fsmAuthenticationState.postValue(
-                            Event(FSMAuthenticationState.AuthenticatedOpenToken)
-                        )
-                    }
-                    FSMAuthenticationSideEffect.PostRefreshingToken -> {
-                        fsmAuthenticationState.postValue(
-                            Event(FSMAuthenticationState.RefreshingOpenToken)
-                        )
-                    }
-                    FSMAuthenticationSideEffect.PostAuthenticatedPrivate -> {
-                        fsmAuthenticationState.postValue(
-                            Event(FSMAuthenticationState.AuthenticatedPrivateToken)
-                        )
-                    }
-                    FSMAuthenticationSideEffect.PostWaitToken -> {
-                        fsmAuthenticationState.postValue(Event(FSMAuthenticationState.WaitingToken))
+                    FSMAuthenticationSideEffect.PostAuthenticated -> {
+                        fsmAuthenticationState.postValue(Event(FSMAuthenticationState.Authenticated))
                     }
                     FSMAuthenticationSideEffect.PostWaitUserConfirmation -> {
                         fsmAuthenticationState.postValue(
@@ -416,47 +311,33 @@ constructor(
 
     fun checkCredentials() {
         viewModelScope.launch {
-            // todo: how to do this
             val credentials: Credentials.CurrentCredential? =
                 protoStore.credentialsFlow.firstOrNull { it.accessToken.isNotBlank() }
             if (credentials == null) {
                 recheckAuthenticationStatus()
             } else {
                 val userResult = userRepository.getUserOrError(credentials.accessToken)
-                parseUserResult(userResult, credentials.refreshToken == PRIVATE_TOKEN)
+                parseUserResult(userResult)
             }
         }
     }
 
-    private fun parseUserResult(
-        user: EitherResult<UnchainedNetworkException, User>,
-        isPrivateToken: Boolean,
-    ) {
+    private fun parseUserResult(user: EitherResult<UnchainedNetworkException, User>) {
         when (user) {
             is EitherResult.Success -> {
                 setCachedUser(user.success)
-                if (isPrivateToken) {
-                    transitionAuthenticationMachine(FSMAuthenticationEvent.OnWorkingPrivateToken)
-                } else {
-                    // todo: check if always posting Expired token makes sense. The idea is that
-                    // this way I
-                    // can manage the expiration time better
-                    // transitionAuthenticationMachine(FSMAuthenticationEvent.OnWorkingOpenToken)
-                    transitionAuthenticationMachine(FSMAuthenticationEvent.OnExpiredOpenToken)
-                }
+                transitionAuthenticationMachine(FSMAuthenticationEvent.OnWorking)
             }
             is EitherResult.Failure -> {
                 // check errors, either ask for a retry or go to login
-                onParseCallFailure(user.failure, isPrivateToken)
+                onParseCallFailure(user.failure)
             }
         }
     }
 
     private fun recheckAuthenticationStatus() {
         when (getAuthenticationMachineState()) {
-            FSMAuthenticationState.AuthenticatedOpenToken,
-            FSMAuthenticationState.AuthenticatedPrivateToken,
-            FSMAuthenticationState.RefreshingOpenToken -> {
+            FSMAuthenticationState.Authenticated -> {
                 transitionAuthenticationMachine(FSMAuthenticationEvent.OnLogout)
             }
             else -> {
@@ -467,128 +348,25 @@ constructor(
         }
     }
 
-    /** Used for testing and debugging if the token refresh works. Disables the current token. */
-    fun invalidateOpenSourceToken() {
-        viewModelScope.launch {
-            val c = protoStore.getCredentials()
-            if (!c.refreshToken.isNullOrEmpty() && c.refreshToken != PRIVATE_TOKEN) {
-                // setUnauthenticated()
-                variousApiRepository.disableToken()
-            }
-        }
-    }
-
+    /** True if the current token was pasted manually rather than obtained via the device flow. */
     suspend fun isTokenPrivate(): Boolean {
         val credentials = protoStore.getCredentials()
-        return credentials.refreshToken == PRIVATE_TOKEN
+        return credentials.authMethod == AUTH_METHOD_MANUAL
     }
 
-    fun refreshToken() {
-
-        viewModelScope.launch {
-            val credentials = protoStore.getCredentials()
-            if (
-                !credentials.refreshToken.isNullOrBlank() &&
-                    credentials.refreshToken != PRIVATE_TOKEN
-            ) {
-                // todo: add EitherResult to check for errors and retry eventually
-                when (val newToken = authRepository.refreshTokenWithError(credentials)) {
-                    is EitherResult.Success -> {
-                        protoStore.setCredentials(
-                            deviceCode = credentials.deviceCode,
-                            clientId = credentials.clientId,
-                            clientSecret = credentials.clientSecret,
-                            accessToken = newToken.success.accessToken,
-                            refreshToken = newToken.success.refreshToken,
-                        )
-
-                        // program the refresh of the token
-                        programTokenRefresh(newToken.success.expiresIn)
-
-                        if (
-                            getAuthenticationMachineState()
-                                is FSMAuthenticationState.RefreshingOpenToken
-                        )
-                            transitionAuthenticationMachine(FSMAuthenticationEvent.OnRefreshed)
-                        // else I'm just refreshing before it expires
-                        // todo: just set it to refreshing at the start of this function
-                    }
-                    is EitherResult.Failure -> {
-                        onParseCallFailure(
-                            newToken.failure,
-                            credentials.deviceCode == PRIVATE_TOKEN,
-                        )
-                    }
-                }
-            }
-        }
-    }
-
-    private fun onParseCallFailure(failure: UnchainedNetworkException, isPrivateToken: Boolean) {
+    /**
+     * TorBox tokens are permanent (no refresh grant for 3rd-party apps): a failure here always
+     * means the stored token is genuinely bad, so unlike RD's version there's no "refresh and
+     * retry" branch - just log out and let the user log back in.
+     */
+    private fun onParseCallFailure(failure: UnchainedNetworkException) {
         when (failure) {
-            is APIError -> {
-                when (failure.errorCode) {
-                    8 -> {
-                        when (getAuthenticationMachineState()) {
-                            FSMAuthenticationState.AuthenticatedOpenToken -> {
-                                // refresh token
-                                transitionAuthenticationMachine(
-                                    FSMAuthenticationEvent.OnExpiredOpenToken
-                                )
-                            }
-                            FSMAuthenticationState.CheckCredentials -> {
-                                if (isPrivateToken)
-                                    transitionAuthenticationMachine(
-                                        FSMAuthenticationEvent.OnNotWorking
-                                    )
-                                else
-                                    transitionAuthenticationMachine(
-                                        FSMAuthenticationEvent.OnExpiredOpenToken
-                                    )
-                            }
-                            FSMAuthenticationState.AuthenticatedPrivateToken -> {
-                                // a private token was incorrect
-                                // todo: should recover from this according to the current fragment
-                                transitionAuthenticationMachine(FSMAuthenticationEvent.OnNotWorking)
-                            }
-                            else -> {
-                                // do nothing
-                            }
-                        }
-                    }
-                    9 -> {
-                        Timber.e("onParseCallFailure 9")
-                        // 9 is permission denied which should mean the token is not valid at all
-                        // and should be
-                        // discarded
+            is TorBoxApiError -> {
+                when (failure.error) {
+                    "BAD_TOKEN",
+                    "NO_AUTH",
+                    "AUTH_ERROR" -> {
                         transitionAuthenticationMachine(FSMAuthenticationEvent.OnNotWorking)
-                    }
-                    10 -> {
-                        transitionAuthenticationMachine(
-                            FSMAuthenticationEvent.OnUserActionNeeded(UserAction.TFA_NEEDED)
-                        )
-                    }
-                    11 -> {
-                        transitionAuthenticationMachine(
-                            FSMAuthenticationEvent.OnUserActionNeeded(UserAction.TFA_PENDING)
-                        )
-                    }
-                    12 -> {
-                        transitionAuthenticationMachine(FSMAuthenticationEvent.OnNotWorking)
-                    }
-                    13 -> {
-                        transitionAuthenticationMachine(FSMAuthenticationEvent.OnNotWorking)
-                    }
-                    14 -> {
-                        transitionAuthenticationMachine(FSMAuthenticationEvent.OnNotWorking)
-                    }
-                    15 -> {
-                        transitionAuthenticationMachine(FSMAuthenticationEvent.OnNotWorking)
-                    }
-                    22 -> {
-                        transitionAuthenticationMachine(
-                            FSMAuthenticationEvent.OnUserActionNeeded(UserAction.IP_NOT_ALLOWED)
-                        )
                     }
                     else -> {
                         transitionAuthenticationMachine(
@@ -638,15 +416,6 @@ constructor(
         savedStateHandle[KEY_LAST_BACK_PRESS] = time
     }
 
-    private fun programTokenRefresh(secondsDelay: Int) {
-        refreshJob?.cancel()
-        refreshJob = viewModelScope.launch {
-            // secondsDelay*950L -> expiration time - 5%
-            delay((secondsDelay * 950L).milliseconds)
-            if (isActive) refreshToken()
-        }
-    }
-
     fun downloadSupportedLink(link: String) {
         viewModelScope.launch {
             when {
@@ -664,23 +433,12 @@ constructor(
                 else -> {
                     var matchFound = false
                     // check the hosts regexs
-                    for (hostRegex in hostsRepository.getHostsRegex()) {
+                    for (hostRegex in webDownloadRepository.getHostsRegex()) {
                         val m: Matcher = Pattern.compile(hostRegex.regex).matcher(link)
                         if (m.matches()) {
                             matchFound = true
                             linkLiveData.postValue(Event(link))
                             break
-                        }
-                    }
-                    // check the folders regexs
-                    if (!matchFound) {
-                        for (hostRegex in hostsRepository.getFoldersRegex()) {
-                            val m: Matcher = Pattern.compile(hostRegex.regex).matcher(link)
-                            if (m.matches()) {
-                                matchFound = true
-                                linkLiveData.postValue(Event(link))
-                                break
-                            }
                         }
                     }
                     if (!matchFound)
@@ -722,7 +480,8 @@ constructor(
 
     fun addTorrentId(torrentID: String) {
         viewModelScope.launch {
-            val torrent: TorrentItem? = torrentsRepository.getTorrentInfo(torrentID)
+            val id = torrentID.toLongOrNull()
+            val torrent: TorrentItem? = id?.let { torrentsRepository.getTorrentInfo(it) }
             if (torrent != null) notificationTorrentLiveData.postEvent(torrent)
             else
                 Timber.e(
@@ -766,34 +525,9 @@ constructor(
         connectivityManager.unregisterNetworkCallback(networkCallback)
     }
 
-    fun updateCredentials(
-        deviceCode: String? = null,
-        clientId: String? = null,
-        clientSecret: String? = null,
-        accessToken: String? = null,
-        refreshToken: String? = null,
-    ) {
-        viewModelScope.launch {
-            protoStore.updateCredentials(
-                deviceCode,
-                clientId,
-                clientSecret,
-                accessToken,
-                refreshToken,
-            )
-        }
-    }
-
-    fun updateCredentialsDeviceCode(deviceCode: String) {
-        viewModelScope.launch { protoStore.updateDeviceCode(deviceCode) }
-    }
-
-    fun updateCredentialsAccessToken(accessToken: String) {
-        viewModelScope.launch { protoStore.updateAccessToken(accessToken) }
-    }
-
-    fun updateCredentialsRefreshToken(refreshToken: String) {
-        viewModelScope.launch { protoStore.updateRefreshToken(refreshToken) }
+    /** Persists a freshly obtained, permanent TorBox API token, replacing any previous one. */
+    fun saveNewCredentials(accessToken: String, authMethod: String) {
+        viewModelScope.launch { protoStore.setCredentials(accessToken, authMethod) }
     }
 
     /**
@@ -831,11 +565,9 @@ constructor(
      */
     fun getCurrentAuthenticationStatus(): CurrentFSMAuthentication =
         when (getAuthenticationMachineState()) {
-            FSMAuthenticationState.AuthenticatedPrivateToken,
-            FSMAuthenticationState.AuthenticatedOpenToken -> CurrentFSMAuthentication.Authenticated
+            FSMAuthenticationState.Authenticated -> CurrentFSMAuthentication.Authenticated
             FSMAuthenticationState.Start,
-            FSMAuthenticationState.CheckCredentials,
-            FSMAuthenticationState.RefreshingOpenToken -> CurrentFSMAuthentication.Waiting
+            FSMAuthenticationState.CheckCredentials -> CurrentFSMAuthentication.Waiting
             else -> CurrentFSMAuthentication.Unauthenticated
         }
 
@@ -1068,7 +800,7 @@ constructor(
                 Data.Builder()
                     .apply {
                         putString(KEY_FOLDER_URI, folder.toString())
-                        putString(KEY_DOWNLOAD_SOURCE, it.download)
+                        putString(KEY_DOWNLOAD_SOURCE, it.link)
                         putString(KEY_DOWNLOAD_NAME, it.filename)
                     }
                     .build()
@@ -1076,7 +808,7 @@ constructor(
             OneTimeWorkRequestBuilder<DownloadWorker>()
                 .setInputData(data)
                 .setConstraints(constraints)
-                .addTag(it.download)
+                .addTag(it.link)
                 .build()
         }
 
