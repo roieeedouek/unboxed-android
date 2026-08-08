@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name" translatable="false">Unchained</string>
+    <string name="app_name" translatable="false">Unboxed</string>
     <string name="google" translatable="false">Google</string>
     <string name="cloudflare" translatable="false">Cloudflare</string>
     <string name="quad9" translatable="false">Quad9</string>
@@ -177,7 +177,7 @@
                           charge you for the app or its services without making it very
                           clear to you exactly what you’re paying for.
                         </p> <p>
-                          The Unchained app stores and processes personal data that
+                          The Unboxed app stores and processes personal data that
                           you have provided to us, in order to provide my
                           Service. It’s your responsibility to keep your phone and
                           access to the app secure. We therefore recommend that you do
@@ -186,7 +186,7 @@
                           official operating system of your device. It could make your
                           phone vulnerable to malware/viruses/malicious programs,
                           compromise your phone’s security features and it could mean
-                          that the Unchained app won’t work properly or at all.
+                          that the Unboxed app won’t work properly or at all.
                         </p> <!----> <p>
                           You should be aware that there are certain things that
                           LivingWithHippos will not take responsibility for. Certain
@@ -263,9 +263,9 @@
         <![CDATA[
         <body>
     <strong>Privacy Policy</strong> <p>
-                  LivingWithHippos built the Unchained app as
-                  an Open Source app. This SERVICE is provided by
-                  LivingWithHippos at no cost and is intended for use as
+                  LivingWithHippos built the original Unchained app, of which Unboxed
+                  is a fork, as an Open Source app. This SERVICE is provided
+                  at no cost and is intended for use as
                   is.
                 </p> <p>
                   This page is used to inform visitors regarding my
@@ -280,7 +280,7 @@
                 </p> <p>
                   The terms used in this Privacy Policy have the same meanings
                   as in our Terms and Conditions, which is accessible at
-                  Unchained unless otherwise defined in this Privacy Policy.
+                  Unboxed unless otherwise defined in this Privacy Policy.
                 </p> <p><strong>Information Collection and Use</strong></p> <p>
                   For a better experience, while using our Service, I
                   may require you to provide us with certain personally
@@ -361,8 +361,8 @@
     <string name="please_login">Please log in your account</string>
     <string name="loading_magnet_link">Loading magnet link…</string>
     <string name="loading_torrent_file">Loading torrent file…</string>
-    <string name="unchained_torrent_download">Unchained Torrent Download</string>
-    <string name="unchained_plugin_download">Unchained Plugin Download</string>
+    <string name="unchained_torrent_download">Unboxed Torrent Download</string>
+    <string name="unchained_plugin_download">Unboxed Plugin Download</string>
     <string name="temporary_torrent_download">Temporary download of a torrent file</string>
     <string name="temporary_plugin_download">Temporary download of a plugin file</string>
     <string name="error_loading_dialog">Error loading the dialog, please reopen it.</string>
@@ -512,7 +512,7 @@
     <string name="download_not_started">Error during download initialization</string>
     <string name="download_not_started_format">Error initializing download of %s</string>
     <string name="multiple_downloads_enqueued_format">%1$d out of %2$d downloads enqueued correctly</string>
-    <string name="needs_download_permission">Unchained needs the storage permission to download files directly</string>
+    <string name="needs_download_permission">Unboxed needs the storage permission to download files directly</string>
     <string name="kodi" translatable="false">Kodi</string>
     <string name="test_connection">Test the connection</string>
     <string name="kodi_credentials_incomplete">At least IP and port are required for Kodi</string>
@@ -539,7 +539,7 @@
     <string name="loading_container_file">Loading container file…</string>
     <string name="no_network_connection">No network connection</string>
     <string name="download_all">Download All</string>
-    <string name="sending_crash_report">Unchained just crashed.\nSending crash report…</string>
+    <string name="sending_crash_report">Unboxed just crashed.\nSending crash report…</string>
     <string name="upload">Upload</string>
     <string name="unsupported_file">File not supported</string>
     <string name="hoster">Hoster</string>
@@ -747,7 +747,7 @@
     <string name="refresh">Refresh</string>
     <string name="api_token">API token</string>
     <string name="pick_search_type">Pick a search type</string>
-    <string name="plugin_search_description">Use community-created plugins specifically for Unchained. This is the default method if you don\'t know what to choose.</string>
+    <string name="plugin_search_description">Use community-created plugins specifically for Unboxed. This is the default method if you don\'t know what to choose.</string>
     <string name="plugins">Plugins</string>
     <string name="services_search_description">Use services such as Jackett, Prowlarr or any Torznab app.</string>
     <string name="all">all</string>

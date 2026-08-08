@@ -119,8 +119,8 @@
     <string name="please_login">Lütfen hesabınıza giriş yapın</string>
     <string name="loading_magnet_link">Magnet bağlantısı yükleniyor…</string>
     <string name="loading_torrent_file">Torrent dosyası yükleniyor…</string>
-    <string name="unchained_torrent_download">Unchained Torrent İndirme</string>
-    <string name="unchained_plugin_download">Unchained Eklenti İndirme</string>
+    <string name="unchained_torrent_download">Unboxed Torrent İndirme</string>
+    <string name="unchained_plugin_download">Unboxed Eklenti İndirme</string>
     <string name="temporary_torrent_download">Torrent dosyasının geçici indirilmesi</string>
     <string name="temporary_plugin_download">Eklenti dosyasının geçici indirilmesi</string>
     <string name="error_loading_dialog">Diyalog yüklenirken hata oluştu, lütfen tekrar açın.</string>
@@ -265,7 +265,7 @@
     <string name="download_not_started">İndirme başlatılırken hata oluştu</string>
     <string name="download_not_started_format">%s indirmesi başlatılırken hata oluştu</string>
     <string name="multiple_downloads_enqueued_format">%2$d indirmeden %1$d tanesi doğru şekilde sıraya alındı</string>
-    <string name="needs_download_permission">Unchained, dosyaları doğrudan indirmek için depolama izni gerektirir</string>
+    <string name="needs_download_permission">Unboxed, dosyaları doğrudan indirmek için depolama izni gerektirir</string>
     <string name="test_connection">Bağlantıyı test et</string>
     <string name="kodi_credentials_incomplete">Kodi için en az IP ve port gereklidir</string>
     <string name="ip_address">IP adresi</string>
@@ -291,7 +291,7 @@
     <string name="loading_container_file">Kapsayıcı dosyası yükleniyor…</string>
     <string name="no_network_connection">Ağ bağlantısı yok</string>
     <string name="download_all">Tümünü indir</string>
-    <string name="sending_crash_report">Unchained çöktü.\nÇökme raporu gönderiliyor…</string>
+    <string name="sending_crash_report">Unboxed çöktü.\nÇökme raporu gönderiliyor…</string>
     <string name="upload">Yükle</string>
     <string name="unsupported_file">Dosya desteklenmiyor</string>
     <string name="hoster">Barındırıcı</string>
@@ -490,7 +490,7 @@
     <string name="refresh">Yenile</string>
     <string name="api_token">API jetonu</string>
     <string name="pick_search_type">Arama türü seç</string>
-    <string name="plugin_search_description">Unchained için özel olarak oluşturulmuş topluluk eklentilerini kullanın. Ne seçeceğinizi bilmiyorsanız bu varsayılan yöntemdir.</string>
+    <string name="plugin_search_description">Unboxed için özel olarak oluşturulmuş topluluk eklentilerini kullanın. Ne seçeceğinizi bilmiyorsanız bu varsayılan yöntemdir.</string>
     <string name="plugins">Eklentiler</string>
     <string name="services_search_description">Jackett, Prowlarr veya herhangi bir Torznab uygulamasını kullanın.</string>
     <string name="all">Tümü</string>

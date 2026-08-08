@@ -117,8 +117,8 @@
     <string name="please_login">Acceda a su cuenta</string>
     <string name="loading_magnet_link">Cargando el enlace del Magnet…</string>
     <string name="loading_torrent_file">Cargando archivo torrent…</string>
-    <string name="unchained_torrent_download">Unchained Torrent Descargar</string>
-    <string name="unchained_plugin_download">Descarga del plugin Unchained</string>
+    <string name="unchained_torrent_download">Unboxed Torrent Descargar</string>
+    <string name="unchained_plugin_download">Descarga del plugin Unboxed</string>
     <string name="temporary_torrent_download">Descarga temporal de un archivo torrent</string>
     <string name="temporary_plugin_download">Descarga temporal de un archivo plugin</string>
     <string name="error_loading_dialog">Error al cargar el diálogo, por favor, vuelva a abrirlo.</string>
@@ -262,7 +262,7 @@
     <string name="download_not_started">Error durante la inicialización de la descarga</string>
     <string name="download_not_started_format">Error al inicializar la descarga de %s</string>
     <string name="multiple_downloads_enqueued_format">%1$d de %2$d descargas en cola correctamente</string>
-    <string name="needs_download_permission">Unchained necesita el permiso de almacenamiento para descargar archivos directamente</string>
+    <string name="needs_download_permission">Unboxed necesita el permiso de almacenamiento para descargar archivos directamente</string>
     <string name="test_connection">Probar la conexión</string>
     <string name="kodi_credentials_incomplete">Al menos la IP y el puerto son necesarios para Kodi</string>
     <string name="ip_address">Dirección IP</string>
@@ -288,7 +288,7 @@
     <string name="loading_container_file">Cargando archivo contenedor…</string>
     <string name="no_network_connection">No hay conexión a la red</string>
     <string name="download_all">Descargar todos</string>
-    <string name="sending_crash_report">Unchained acaba de estrellarse.\nEnviando el informe del accidente…</string>
+    <string name="sending_crash_report">Unboxed acaba de estrellarse.\nEnviando el informe del accidente…</string>
     <string name="upload">Subir a</string>
     <string name="unsupported_file">Archivo no admitido</string>
     <string name="hoster">Hoster</string>
@@ -490,7 +490,7 @@
     <string name="infringing_file">Archivo infractor bloqueado</string>
     <string name="api_token">API token</string>
     <string name="pick_search_type">Elija un tipo de búsqueda</string>
-    <string name="plugin_search_description">Utiliza plugins creados por la comunidad específicamente para Unchained. Este es el método por defecto si no sabes qué elegir.</string>
+    <string name="plugin_search_description">Utiliza plugins creados por la comunidad específicamente para Unboxed. Este es el método por defecto si no sabes qué elegir.</string>
     <string name="plugins">Plugins</string>
     <string name="services_search_description">Utiliza servicios como Jackett, Prowlarr o cualquier app de Torznab.</string>
     <string name="all">todos</string>

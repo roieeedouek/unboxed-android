@@ -119,8 +119,8 @@
     <string name="please_login">계정에 로그인해 주세요</string>
     <string name="loading_magnet_link">마그넷 링크 로딩 중…</string>
     <string name="loading_torrent_file">토렌트 파일 로딩 중…</string>
-    <string name="unchained_torrent_download">Unchained 토렌트 다운로드</string>
-    <string name="unchained_plugin_download">Unchained 플러그인 다운로드</string>
+    <string name="unchained_torrent_download">Unboxed 토렌트 다운로드</string>
+    <string name="unchained_plugin_download">Unboxed 플러그인 다운로드</string>
     <string name="temporary_torrent_download">토렌트 파일 임시 다운로드</string>
     <string name="temporary_plugin_download">플러그인 파일 임시 다운로드</string>
     <string name="error_loading_dialog">대화상자를 로드하는 중 오류가 발생했습니다. 다시 열어주세요.</string>
@@ -291,7 +291,7 @@
     <string name="loading_container_file">컨테이너 파일 로딩 중…</string>
     <string name="no_network_connection">네트워크 연결 없음</string>
     <string name="download_all">모두 다운로드</string>
-    <string name="sending_crash_report">Unchained가 방금 종료되었습니다.\n오류 보고서 전송 중…</string>
+    <string name="sending_crash_report">Unboxed가 방금 종료되었습니다.\n오류 보고서 전송 중…</string>
     <string name="upload">업로드</string>
     <string name="unsupported_file">지원하지 않는 파일</string>
     <string name="hoster">호스트(Hoster)</string>
@@ -491,7 +491,7 @@
     <string name="refresh">새로고침</string>
     <string name="api_token">API 토큰</string>
     <string name="pick_search_type">검색 유형 선택</string>
-    <string name="plugin_search_description">Unchained 전용으로 제작된 커뮤니티 플러그인을 사용합니다. 무엇을 선택할지 모를 때 권장되는 기본 방법입니다.</string>
+    <string name="plugin_search_description">Unboxed 전용으로 제작된 커뮤니티 플러그인을 사용합니다. 무엇을 선택할지 모를 때 권장되는 기본 방법입니다.</string>
     <string name="plugins">플러그인</string>
     <string name="services_search_description">Jackett, Prowlarr 또는 기타 Torznab 앱과 같은 서비스를 사용합니다.</string>
     <string name="all">전체</string>
