@@ -6,7 +6,7 @@ const val BASE_URL = "https://api.torbox.app/v1/api/"
 const val REFERRAL_LINK = "https://torbox.app/subscription"
 const val ACCOUNT_LINK = "https://torbox.app/settings"
 const val DEFAULT_PLUGINS_REPOSITORY_LINK =
-    "https://gitlab.com/LivingWithHippos/unchained-plugins/-/raw/main/repository/repository.json"
+    "https://gitlab.com/LivingWithHippos/unchained-plugins/-/raw/main/repository/repo.json"
 
 /** Folder name for the plugins installed manually, not from a web repository */
 const val MANUAL_PLUGINS_REPOSITORY_NAME = "common_repository"

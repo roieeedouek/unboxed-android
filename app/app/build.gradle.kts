@@ -44,7 +44,12 @@ android {
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "com.github.livingwithhippos.unchained"
+        // deliberately different from the upstream Unchained app's applicationId
+        // (com.github.livingwithhippos.unchained) so both can be installed side by side without
+        // colliding - namespace (below) is left as-is since it only affects the internal
+        // Kotlin/Java package used for generated R/BuildConfig classes, not the installed app's
+        // identity.
+        applicationId = "com.github.roieeedouek.unboxed"
         minSdk = 27
         targetSdk = 37
         versionCode = 60
