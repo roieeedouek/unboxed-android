@@ -124,8 +124,9 @@ class TorrentDetailsFragment : UnchainedFragment(), TorrentContentListener {
                     binding.tvName.text = torrent.name
                     val progressPercent = (torrent.progress * 100).toInt()
                     binding.tvProgressPercent.text =
-                        getString(R.string.percent_format, progressPercent)
-                    binding.tvProgress.text = getString(R.string.percent_format, progressPercent)
+                        getString(R.string.percent_format, progressPercent.toFloat())
+                    binding.tvProgress.text =
+                        getString(R.string.percent_format, progressPercent.toFloat())
                     if (progressPercent in 0..99) {
                         binding.tvProgress.visibility = View.VISIBLE
                     } else {
