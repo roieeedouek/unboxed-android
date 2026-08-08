@@ -2,39 +2,28 @@ package com.github.livingwithhippos.unchained.di
 
 import android.content.SharedPreferences
 import com.github.livingwithhippos.unchained.BuildConfig
-import com.github.livingwithhippos.unchained.data.model.EmptyBodyInterceptor
 import com.github.livingwithhippos.unchained.data.remote.AuthApiHelper
 import com.github.livingwithhippos.unchained.data.remote.AuthApiHelperImpl
 import com.github.livingwithhippos.unchained.data.remote.AuthenticationApi
 import com.github.livingwithhippos.unchained.data.remote.CustomDownload
 import com.github.livingwithhippos.unchained.data.remote.CustomDownloadHelper
 import com.github.livingwithhippos.unchained.data.remote.CustomDownloadHelperImpl
-import com.github.livingwithhippos.unchained.data.remote.DownloadApi
-import com.github.livingwithhippos.unchained.data.remote.DownloadApiHelper
-import com.github.livingwithhippos.unchained.data.remote.DownloadApiHelperImpl
-import com.github.livingwithhippos.unchained.data.remote.HostsApi
-import com.github.livingwithhippos.unchained.data.remote.HostsApiHelper
-import com.github.livingwithhippos.unchained.data.remote.HostsApiHelperImpl
 import com.github.livingwithhippos.unchained.data.remote.StreamingApi
 import com.github.livingwithhippos.unchained.data.remote.StreamingApiHelper
 import com.github.livingwithhippos.unchained.data.remote.StreamingApiHelperImpl
 import com.github.livingwithhippos.unchained.data.remote.TorrentApiHelper
 import com.github.livingwithhippos.unchained.data.remote.TorrentApiHelperImpl
 import com.github.livingwithhippos.unchained.data.remote.TorrentsApi
-import com.github.livingwithhippos.unchained.data.remote.UnrestrictApi
-import com.github.livingwithhippos.unchained.data.remote.UnrestrictApiHelper
-import com.github.livingwithhippos.unchained.data.remote.UnrestrictApiHelperImpl
 import com.github.livingwithhippos.unchained.data.remote.UpdateApi
 import com.github.livingwithhippos.unchained.data.remote.UpdateApiHelper
 import com.github.livingwithhippos.unchained.data.remote.UpdateApiHelperImpl
 import com.github.livingwithhippos.unchained.data.remote.UserApi
 import com.github.livingwithhippos.unchained.data.remote.UserApiHelper
 import com.github.livingwithhippos.unchained.data.remote.UserApiHelperImpl
-import com.github.livingwithhippos.unchained.data.remote.VariousApi
-import com.github.livingwithhippos.unchained.data.remote.VariousApiHelper
-import com.github.livingwithhippos.unchained.data.remote.VariousApiHelperImpl
+import com.github.livingwithhippos.unchained.data.remote.WebDownloadApi
+import com.github.livingwithhippos.unchained.data.remote.WebDownloadApiHelper
+import com.github.livingwithhippos.unchained.data.remote.WebDownloadApiHelperImpl
 import com.github.livingwithhippos.unchained.plugins.Parser
-import com.github.livingwithhippos.unchained.utilities.BASE_AUTH_URL
 import com.github.livingwithhippos.unchained.utilities.BASE_URL
 import dagger.Module
 import dagger.Provides
@@ -79,8 +68,6 @@ object ApiFactory {
                 )
                 // logs all the calls, removed in the release channel
                 .addInterceptor(logInterceptor)
-                // avoid issues with empty bodies on delete/put and 20x return codes
-                .addInterceptor(EmptyBodyInterceptor)
                 .build()
         } else
             return OkHttpClient()
@@ -94,8 +81,6 @@ object ApiFactory {
                             .build(),
                     )
                 )
-                // avoid issues with empty bodies on delete/put and 20x return codes
-                .addInterceptor(EmptyBodyInterceptor)
                 .build()
     }
 
@@ -131,8 +116,6 @@ object ApiFactory {
                     )
                     // logs all the calls, removed in the release channel
                     .addInterceptor(logInterceptor)
-                    // avoid issues with empty bodies on delete/put and 20x return codes
-                    .addInterceptor(EmptyBodyInterceptor)
                     .build()
             } else {
                 OkHttpClient()
@@ -146,7 +129,6 @@ object ApiFactory {
                                 .build(),
                         )
                     )
-                    .addInterceptor(EmptyBodyInterceptor)
                     .build()
             }
 
@@ -206,16 +188,6 @@ object ApiFactory {
 
     @Provides
     @Singleton
-    @AuthRetrofit
-    fun authRetrofit(@ClassicClient okHttpClient: OkHttpClient): Retrofit =
-        Retrofit.Builder()
-            .client(okHttpClient)
-            .baseUrl(BASE_AUTH_URL)
-            .addConverterFactory(MoshiConverterFactory.create())
-            .build()
-
-    @Provides
-    @Singleton
     @ApiRetrofit
     fun apiRetrofit(@ClassicClient okHttpClient: OkHttpClient): Retrofit {
         return Retrofit.Builder()
@@ -229,7 +201,7 @@ object ApiFactory {
     // authentication api injection
     @Provides
     @Singleton
-    fun provideAuthenticationApi(@AuthRetrofit retrofit: Retrofit): AuthenticationApi {
+    fun provideAuthenticationApi(@ApiRetrofit retrofit: Retrofit): AuthenticationApi {
         return retrofit.create(AuthenticationApi::class.java)
     }
 
@@ -248,16 +220,16 @@ object ApiFactory {
     @Singleton
     fun provideUserApiHelper(apiHelper: UserApiHelperImpl): UserApiHelper = apiHelper
 
-    // unrestrict api injection
+    // web download (unrestrict) api injection
     @Provides
     @Singleton
-    fun provideUnrestrictApi(@ApiRetrofit retrofit: Retrofit): UnrestrictApi {
-        return retrofit.create(UnrestrictApi::class.java)
+    fun provideWebDownloadApi(@ApiRetrofit retrofit: Retrofit): WebDownloadApi {
+        return retrofit.create(WebDownloadApi::class.java)
     }
 
     @Provides
     @Singleton
-    fun provideUnrestrictApiHelper(apiHelper: UnrestrictApiHelperImpl): UnrestrictApiHelper =
+    fun provideWebDownloadApiHelper(apiHelper: WebDownloadApiHelperImpl): WebDownloadApiHelper =
         apiHelper
 
     // streaming api injection
@@ -281,39 +253,6 @@ object ApiFactory {
     @Provides
     @Singleton
     fun provideTorrentsApiApiHelper(apiHelper: TorrentApiHelperImpl): TorrentApiHelper = apiHelper
-
-    // download api injection
-    @Provides
-    @Singleton
-    fun provideDownloadsApi(@ApiRetrofit retrofit: Retrofit): DownloadApi {
-        return retrofit.create(DownloadApi::class.java)
-    }
-
-    @Provides
-    @Singleton
-    fun provideDownloadApiHelper(apiHelper: DownloadApiHelperImpl): DownloadApiHelper = apiHelper
-
-    // hosts api injection
-    @Provides
-    @Singleton
-    fun provideHostsApi(@ApiRetrofit retrofit: Retrofit): HostsApi {
-        return retrofit.create(HostsApi::class.java)
-    }
-
-    @Provides
-    @Singleton
-    fun provideHostsApiHelper(apiHelper: HostsApiHelperImpl): HostsApiHelper = apiHelper
-
-    // various api injection
-    @Provides
-    @Singleton
-    fun provideVariousApi(@ApiRetrofit retrofit: Retrofit): VariousApi {
-        return retrofit.create(VariousApi::class.java)
-    }
-
-    @Provides
-    @Singleton
-    fun provideVariousApiHelper(apiHelper: VariousApiHelperImpl): VariousApiHelper = apiHelper
 
     // update api injection
     @Provides

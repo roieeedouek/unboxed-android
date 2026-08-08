@@ -4,27 +4,23 @@ import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.github.livingwithhippos.unchained.data.model.EmptyBodyError
+import com.github.livingwithhippos.unchained.data.model.CreatedTorrent
 import com.github.livingwithhippos.unchained.data.model.TorrentItem
 import com.github.livingwithhippos.unchained.data.model.UnchainedNetworkException
-import com.github.livingwithhippos.unchained.data.model.UploadedTorrent
 import com.github.livingwithhippos.unchained.data.repository.TorrentsRepository
-import com.github.livingwithhippos.unchained.torrentdetails.model.TorrentFileItem
 import com.github.livingwithhippos.unchained.utilities.EitherResult
 import com.github.livingwithhippos.unchained.utilities.Event
-import com.github.livingwithhippos.unchained.utilities.Node
-import com.github.livingwithhippos.unchained.utilities.beforeSelectionStatusList
 import com.github.livingwithhippos.unchained.utilities.extension.cancelIfActive
 import com.github.livingwithhippos.unchained.utilities.postEvent
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
+import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import timber.log.Timber
-import kotlin.time.Duration.Companion.milliseconds
 
 @HiltViewModel
 class TorrentProcessingViewModel
@@ -36,26 +32,19 @@ constructor(
 
     val networkExceptionLiveData = MutableLiveData<Event<UnchainedNetworkException>>()
     val torrentLiveData = MutableLiveData<Event<TorrentEvent>>()
-    val structureLiveData = MutableLiveData<Event<Node<TorrentFileItem>>>()
 
     private var job: Job? = null
 
     fun fetchAddedMagnet(magnet: String) {
         viewModelScope.launch {
-            val availableHosts = torrentsRepository.getAvailableHosts()
-            if (availableHosts.isNullOrEmpty()) {
-                Timber.e("Error fetching available hosts")
-            } else {
-                val addedMagnet = torrentsRepository.addMagnet(magnet, availableHosts.first().host)
-                when (addedMagnet) {
-                    is EitherResult.Failure -> {
-                        Timber.e("Error adding magnet: ${addedMagnet.failure}")
-                        networkExceptionLiveData.postEvent(addedMagnet.failure)
-                    }
-                    is EitherResult.Success -> {
-                        setTorrentID(addedMagnet.success.id)
-                        torrentLiveData.postEvent(TorrentEvent.Uploaded(addedMagnet.success))
-                    }
+            when (val created = torrentsRepository.createTorrent(magnet = magnet)) {
+                is EitherResult.Failure -> {
+                    Timber.e("Error adding magnet: ${created.failure}")
+                    networkExceptionLiveData.postEvent(created.failure)
+                }
+                is EitherResult.Success -> {
+                    setTorrentID(created.success.torrentId.toString())
+                    torrentLiveData.postEvent(TorrentEvent.Created(created.success))
                 }
             }
         }
@@ -66,8 +55,8 @@ constructor(
         setTorrentID(torrentID)
 
         viewModelScope.launch {
-            val torrentData: TorrentItem? = torrentsRepository.getTorrentInfo(torrentID)
-            // todo: replace using either
+            val id = torrentID.toLongOrNull()
+            val torrentData: TorrentItem? = id?.let { torrentsRepository.getTorrentInfo(it) }
             if (torrentData != null) {
                 setTorrentDetails(torrentData)
                 torrentLiveData.postEvent(TorrentEvent.TorrentInfo(torrentData))
@@ -89,16 +78,18 @@ constructor(
         savedStateHandle[KEY_CURRENT_TORRENT_ID] = id
     }
 
-    fun updateTorrentStructure() {
-        torrentLiveData.postEvent(TorrentEvent.SelectionUpdated)
-    }
+    /**
+     * TorBox has no server-side file-selection step: every file starts downloading as soon as the
+     * torrent is added. This just polls [TorrentsRepository.getTorrentInfo] until the torrent's
+     * file list is populated (metadata fetched), which is all there is to wait for before the
+     * torrent details screen can show something useful.
+     */
+    fun startMetadataPollLoop() {
 
-    fun startSelectionLoop(files: String = "all") {
-
-        val id = getTorrentID()
+        val id = getTorrentID()?.toLongOrNull()
 
         if (id == null) {
-            Timber.e("Torrent files selection requested but torrent id was not ready")
+            Timber.e("Torrent metadata poll requested but torrent id was not ready")
             return
         }
 
@@ -106,38 +97,11 @@ constructor(
 
         job =
             viewModelScope.launch(Dispatchers.IO) {
-                var selected = false
-                // / maybe job.isActive?
                 while (isActive) {
-                    if (!selected) {
-                        when (val selectResponse = torrentsRepository.selectFiles(id, files)) {
-                            is EitherResult.Failure -> {
-                                if (selectResponse.failure is EmptyBodyError) {
-                                    Timber.d(
-                                        "Select torrent files success returned ${selectResponse.failure.returnCode}"
-                                    )
-                                    selected = true
-                                } else {
-                                    Timber.e(
-                                        "Exception during torrent files selection call: ${selectResponse.failure}"
-                                    )
-                                }
-                            }
-                            is EitherResult.Success -> {
-                                Timber.d("Select torrent files success")
-                                selected = true
-                            }
-                        }
-                    }
-
-                    if (selected) {
-                        val torrentItem: TorrentItem? = torrentsRepository.getTorrentInfo(id)
-                        if (torrentItem != null) {
-                            if (!beforeSelectionStatusList.contains(torrentItem.status)) {
-                                job?.cancelIfActive()
-                                torrentLiveData.postEvent(TorrentEvent.FilesSelected(torrentItem))
-                            }
-                        }
+                    val torrentItem: TorrentItem? = torrentsRepository.getTorrentInfo(id)
+                    if (torrentItem != null && !torrentItem.files.isNullOrEmpty()) {
+                        job?.cancelIfActive()
+                        torrentLiveData.postEvent(TorrentEvent.FilesReady(torrentItem))
                     }
                     delay(1500.milliseconds)
                 }
@@ -150,21 +114,13 @@ constructor(
 
     fun fetchUploadedTorrent(binaryTorrent: ByteArray) {
         viewModelScope.launch {
-            val availableHosts = torrentsRepository.getAvailableHosts()
-            if (availableHosts.isNullOrEmpty()) {
-                Timber.e("Error fetching available hosts")
-                torrentLiveData.postEvent(TorrentEvent.DownloadedFileFailure)
-            } else {
-                val uploadedTorrent =
-                    torrentsRepository.addTorrent(binaryTorrent, availableHosts.first().host)
-                when (uploadedTorrent) {
-                    is EitherResult.Failure -> {
-                        networkExceptionLiveData.postEvent(uploadedTorrent.failure)
-                        torrentLiveData.postEvent(TorrentEvent.DownloadedFileFailure)
-                    }
-                    is EitherResult.Success -> {
-                        fetchTorrentDetails(uploadedTorrent.success.id)
-                    }
+            when (val created = torrentsRepository.createTorrent(torrentFile = binaryTorrent)) {
+                is EitherResult.Failure -> {
+                    networkExceptionLiveData.postEvent(created.failure)
+                    torrentLiveData.postEvent(TorrentEvent.DownloadedFileFailure)
+                }
+                is EitherResult.Success -> {
+                    fetchTorrentDetails(created.success.torrentId.toString())
                 }
             }
         }
@@ -177,17 +133,11 @@ constructor(
 }
 
 sealed class TorrentEvent {
-    data class Uploaded(val torrent: UploadedTorrent) : TorrentEvent()
+    data class Created(val torrent: CreatedTorrent) : TorrentEvent()
 
     data class TorrentInfo(val item: TorrentItem) : TorrentEvent()
 
-    data class FilesSelected(val torrent: TorrentItem) : TorrentEvent()
-
-    data object SelectionUpdated : TorrentEvent()
-
-    data object DownloadAll : TorrentEvent()
-
-    data class DownloadSelection(val filesNumber: Int) : TorrentEvent()
+    data class FilesReady(val torrent: TorrentItem) : TorrentEvent()
 
     data object DownloadedFileSuccess : TorrentEvent()
 

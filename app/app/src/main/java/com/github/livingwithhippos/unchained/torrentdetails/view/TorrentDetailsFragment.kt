@@ -19,10 +19,10 @@ import androidx.navigation.fragment.navArgs
 import com.github.livingwithhippos.unchained.R
 import com.github.livingwithhippos.unchained.base.DeleteDialogFragment
 import com.github.livingwithhippos.unchained.base.UnchainedFragment
-import com.github.livingwithhippos.unchained.data.model.APIError
 import com.github.livingwithhippos.unchained.data.model.ApiConversionError
 import com.github.livingwithhippos.unchained.data.model.EmptyBodyError
 import com.github.livingwithhippos.unchained.data.model.NetworkError
+import com.github.livingwithhippos.unchained.data.model.TorBoxApiError
 import com.github.livingwithhippos.unchained.data.model.TorrentItem
 import com.github.livingwithhippos.unchained.databinding.FragmentTorrentDetailsBinding
 import com.github.livingwithhippos.unchained.lists.view.ListState
@@ -36,6 +36,7 @@ import com.github.livingwithhippos.unchained.utilities.Node
 import com.github.livingwithhippos.unchained.utilities.extension.copyToClipboard
 import com.github.livingwithhippos.unchained.utilities.extension.getApiErrorMessage
 import com.github.livingwithhippos.unchained.utilities.extension.getFileSizeString
+import com.github.livingwithhippos.unchained.utilities.extension.getStatusTranslation
 import com.github.livingwithhippos.unchained.utilities.extension.showToast
 import com.github.livingwithhippos.unchained.utilities.loadingStatusList
 import dagger.hilt.android.AndroidEntryPoint
@@ -101,23 +102,7 @@ class TorrentDetailsFragment : UnchainedFragment(), TorrentContentListener {
             Lifecycle.State.RESUMED,
         )
 
-        val statusTranslation =
-            mapOf(
-                "magnet_error" to getString(R.string.magnet_error),
-                "magnet_conversion" to getString(R.string.magnet_conversion),
-                "waiting_files_selection" to getString(R.string.waiting_files_selection),
-                "queued" to getString(R.string.queued),
-                "downloading" to getString(R.string.downloading),
-                "downloaded" to getString(R.string.downloaded),
-                "ready" to getString(R.string.ready),
-                "error" to getString(R.string.error),
-                "virus" to getString(R.string.virus),
-                "compressing" to getString(R.string.compressing),
-                "uploading" to getString(R.string.uploading),
-                "dead" to getString(R.string.dead),
-            )
-
-        binding.tvStatus.text = statusTranslation[args.item.status] ?: args.item.status
+        binding.tvStatus.text = requireContext().getStatusTranslation(args.item.downloadState)
         binding.fabShareMagnet.setOnClickListener { onShareMagnetClick() }
         binding.fabCopyMagnet.setOnClickListener { onCopyMagnetClick() }
         binding.bDownload.setOnClickListener { onDownloadClick() }
@@ -129,29 +114,31 @@ class TorrentDetailsFragment : UnchainedFragment(), TorrentContentListener {
             viewLifecycleOwner,
             EventObserver {
                 it?.let { torrent ->
-                    val selectedFiles: Int =
-                        torrent.files?.count { file -> file.selected == 1 } ?: 0
-                    binding.tvSelectedFilesNumber.text = selectedFiles.toString()
+                    val totalFiles = torrent.files?.count() ?: 0
+                    // TorBox has no file-selection step: every file is always "selected"
+                    binding.tvSelectedFilesNumber.text = totalFiles.toString()
 
-                    binding.tvStatus.text = statusTranslation[torrent.status] ?: torrent.status
+                    binding.tvStatus.text = requireContext().getStatusTranslation(torrent.downloadState)
 
-                    binding.tvTotalFiles.text = (torrent.files?.count() ?: 0).toString()
-                    binding.tvName.text = torrent.filename
+                    binding.tvTotalFiles.text = totalFiles.toString()
+                    binding.tvName.text = torrent.name
+                    val progressPercent = (torrent.progress * 100).toInt()
                     binding.tvProgressPercent.text =
-                        getString(R.string.percent_format, torrent.progress)
-                    binding.tvProgress.text = getString(R.string.percent_format, torrent.progress)
-                    if (torrent.progress >= 0 && torrent.progress < 100) {
+                        getString(R.string.percent_format, progressPercent.toFloat())
+                    binding.tvProgress.text =
+                        getString(R.string.percent_format, progressPercent.toFloat())
+                    if (progressPercent in 0..99) {
                         binding.tvProgress.visibility = View.VISIBLE
                     } else {
                         binding.tvProgress.visibility = View.GONE
                     }
                     try {
-                        val torrentSpeed = torrent.speed
+                        val torrentSpeed = torrent.downloadSpeed
                         if (torrentSpeed == null) {
                             binding.tvSpeed.text = ""
                         } else {
                             binding.tvSpeed.text =
-                                when (torrent.speed.toString().length) {
+                                when (torrentSpeed.toString().length) {
                                     in 0..3 -> getString(R.string.speed_format_b, torrentSpeed)
                                     in 4..6 ->
                                         getString(R.string.speed_format_kb, torrentSpeed / 1000.0)
@@ -164,42 +151,34 @@ class TorrentDetailsFragment : UnchainedFragment(), TorrentContentListener {
                                 }
                         }
                     } catch (ex: Exception) {
-                        Timber.e(ex, "Error formatting speed from '${torrent.speed}'")
+                        Timber.e(ex, "Error formatting speed from '${torrent.downloadSpeed}'")
                         binding.tvSpeed.text = ""
                     }
-                    if (torrent.seeders == null) {
+                    if (torrent.seeds == null) {
                         binding.tvSeeders.visibility = View.GONE
                     } else {
                         binding.tvSeeders.text =
                             resources.getQuantityString(
                                 R.plurals.seeders_format,
-                                torrent.seeders,
-                                torrent.seeders,
+                                torrent.seeds,
+                                torrent.seeds,
                             )
                         binding.tvSeeders.visibility = View.VISIBLE
                     }
-                    binding.pbDownload.setProgressCompat(torrent.progress.toInt(), true)
-                    if (
-                        torrent.status.equals("downloaded", true) ||
-                            torrent.status.equals("ready", true)
-                    ) {
-                        binding.bDownload.visibility = View.VISIBLE
-                    } else {
-                        binding.bDownload.visibility = View.GONE
-                    }
+                    binding.pbDownload.setProgressCompat(progressPercent, true)
+                    binding.bDownload.visibility =
+                        if (torrent.downloadPresent) View.VISIBLE else View.GONE
                     context?.let { ctx ->
-                        torrent.originalBytes?.let { size ->
-                            binding.tvFileSize.text = getFileSizeString(ctx, size)
-                        }
-                        binding.tvSelectedSize.text = getFileSizeString(ctx, torrent.bytes)
+                        binding.tvFileSize.text = getFileSizeString(ctx, torrent.size)
+                        binding.tvSelectedSize.text = getFileSizeString(ctx, torrent.size)
                     }
                     binding.cvDownloadDetails.visibility =
-                        if (torrent.status.equals("downloading", true)) View.VISIBLE else View.GONE
+                        if (torrent.downloadState.equals("downloading", true)) View.VISIBLE
+                        else View.GONE
 
                     // Data should not change between updates so we should just populate it once
                     if (adapter.itemCount == 0) {
-                        val torrentStructure: Node<TorrentFileItem> =
-                            getFilesNodes(torrent, selectedOnly = true)
+                        val torrentStructure: Node<TorrentFileItem> = getFilesNodes(torrent)
                         // show list only if it's populated enough
                         if (torrentStructure.children.isNotEmpty()) {
                             val filesList = mutableListOf<TorrentFileItem>()
@@ -249,8 +228,10 @@ class TorrentDetailsFragment : UnchainedFragment(), TorrentContentListener {
             EventObserver {
                 for (error in it) {
                     when (error) {
-                        is APIError -> {
-                            context?.let { c -> c.showToast(c.getApiErrorMessage(error.errorCode)) }
+                        is TorBoxApiError -> {
+                            context?.let { c ->
+                                c.showToast(c.getApiErrorMessage(error.error, error.detail))
+                            }
                         }
 
                         is EmptyBodyError -> {}
@@ -267,7 +248,8 @@ class TorrentDetailsFragment : UnchainedFragment(), TorrentContentListener {
         )
 
         // maybe load and save the latest retrieved one in the view-model?
-        if (loadingStatusList.contains(args.item.status)) viewModel.pollTorrentStatus(args.item.id)
+        if (loadingStatusList.contains(args.item.downloadState))
+            viewModel.pollTorrentStatus(args.item.id)
         else {
             viewModel.getFullTorrentInfo(args.item.id)
         }
@@ -282,21 +264,17 @@ class TorrentDetailsFragment : UnchainedFragment(), TorrentContentListener {
 
     fun onDownloadClick() {
         val item: TorrentItem = viewModel.torrentLiveData.value?.peekContent() ?: args.item
-        if (item.links.size > 1) {
+        val fileCount = item.files?.size ?: 0
+        if (fileCount > 1) {
             val action =
                 TorrentDetailsFragmentDirections.actionTorrentDetailsToTorrentFolder(
-                    folder = null,
                     torrent = item,
-                    linkList = null,
+                    webDownload = null,
                 )
             findNavController().navigate(action)
         } else {
             viewModel.downloadTorrent(item)
         }
-    }
-
-    fun onDeleteClick(id: String) {
-        viewModel.deleteTorrent(id)
     }
 
     fun onShareMagnetClick() {
@@ -307,7 +285,7 @@ class TorrentDetailsFragment : UnchainedFragment(), TorrentContentListener {
     }
 
     fun onCopyMagnetClick() {
-        copyToClipboard("Real-Debrid Magnet", "magnet:?xt=urn:btih:${args.item.hash}")
+        copyToClipboard(getString(R.string.torbox_magnet), "magnet:?xt=urn:btih:${args.item.hash}")
         context?.showToast(R.string.link_copied)
     }
 

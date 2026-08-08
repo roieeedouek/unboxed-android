@@ -10,11 +10,13 @@ import com.github.livingwithhippos.unchained.data.local.CompleteRemoteServiceDet
 import com.github.livingwithhippos.unchained.data.local.RemoteServiceType
 import com.github.livingwithhippos.unchained.data.model.KodiDevice
 import com.github.livingwithhippos.unchained.data.model.Stream
-import com.github.livingwithhippos.unchained.data.repository.DownloadRepository
+import com.github.livingwithhippos.unchained.data.remote.StreamContentType
 import com.github.livingwithhippos.unchained.data.repository.KodiRepository
 import com.github.livingwithhippos.unchained.data.repository.ServiceRepository
 import com.github.livingwithhippos.unchained.data.repository.StreamingRepository
+import com.github.livingwithhippos.unchained.data.repository.TorrentsRepository
 import com.github.livingwithhippos.unchained.data.repository.VLCRemoteRepository
+import com.github.livingwithhippos.unchained.data.repository.WebDownloadRepository
 import com.github.livingwithhippos.unchained.utilities.EitherResult
 import com.github.livingwithhippos.unchained.utilities.Event
 import com.github.livingwithhippos.unchained.utilities.postEvent
@@ -31,7 +33,8 @@ class DownloadDetailsViewModel
 constructor(
     private val preferences: SharedPreferences,
     private val streamingRepository: StreamingRepository,
-    private val downloadRepository: DownloadRepository,
+    private val webDownloadRepository: WebDownloadRepository,
+    private val torrentsRepository: TorrentsRepository,
     private val kodiRepository: KodiRepository,
     private val remoteServiceRepository: VLCRemoteRepository,
     private val serviceRepository: ServiceRepository,
@@ -42,18 +45,33 @@ constructor(
     val messageLiveData = MutableLiveData<Event<DownloadDetailsMessage>>()
     val eventLiveData = MutableLiveData<Event<DownloadEvent>>()
 
-    fun fetchStreamingInfo(id: String) {
+    fun fetchStreamingInfo(contentId: Long, fileId: Long, contentType: String) {
         viewModelScope.launch {
-            val streamingInfo = streamingRepository.getStreams(id)
-            streamLiveData.postValue(streamingInfo)
+            when (val result = streamingRepository.createStream(contentId, fileId, contentType)) {
+                is EitherResult.Success -> streamLiveData.postValue(result.success)
+                is EitherResult.Failure -> {
+                    Timber.e("Error creating stream: ${result.failure}")
+                    streamLiveData.postValue(null)
+                }
+            }
         }
     }
 
-    fun deleteDownload(id: String) {
+    /**
+     * There's no "delete this one resolved link" operation in TorBox (unlike RD's downloads
+     * list), so this deletes the whole torrent/webdl item the file belongs to.
+     */
+    fun deleteDownload(contentId: Long, contentType: String) {
         viewModelScope.launch {
-            val deleted = downloadRepository.deleteDownload(id)
-            if (deleted == null) deletedDownloadLiveData.postEvent(-1)
-            else deletedDownloadLiveData.postEvent(1)
+            val result =
+                when (contentType) {
+                    StreamContentType.WEB_DOWNLOAD -> webDownloadRepository.deleteWebDownload(contentId)
+                    else -> torrentsRepository.deleteTorrent(contentId)
+                }
+            when (result) {
+                is EitherResult.Failure -> deletedDownloadLiveData.postEvent(-1)
+                is EitherResult.Success -> deletedDownloadLiveData.postEvent(1)
+            }
         }
     }
 

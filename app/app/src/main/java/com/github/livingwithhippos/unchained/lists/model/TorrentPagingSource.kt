@@ -7,12 +7,15 @@ import com.github.livingwithhippos.unchained.data.repository.TorrentsRepository
 import java.io.IOException
 import retrofit2.HttpException
 
-private const val TORRENT_STARTING_PAGE_INDEX = 1
+private const val TORRENT_STARTING_OFFSET = 0
 
 /**
  * Paging Source Using Paging V3. See
  * https://github.com/android/architecture-components-samples/tree/main/PagingWithNetworkSample for
  * a sample
+ *
+ * TorBox's `mylist` only supports `offset`/`limit` (no `page`/`filter` like RD's endpoint), so keys
+ * here are item offsets rather than page numbers.
  */
 class TorrentPagingSource(
     private val torrentsRepository: TorrentsRepository,
@@ -20,20 +23,21 @@ class TorrentPagingSource(
 ) : PagingSource<Int, TorrentItem>() {
 
     override suspend fun load(params: LoadParams<Int>): LoadResult<Int, TorrentItem> {
-        val page = params.key ?: TORRENT_STARTING_PAGE_INDEX
+        val offset = params.key ?: TORRENT_STARTING_OFFSET
+        val limit = params.loadSize
 
         return try {
             val response =
-                if (query.isBlank()) torrentsRepository.getTorrentsList(null, page, params.loadSize)
+                if (query.isBlank()) torrentsRepository.getTorrentsList(offset, limit)
                 else
-                    torrentsRepository.getTorrentsList(null, page, params.loadSize).filter {
-                        it.filename.contains(query, ignoreCase = true)
+                    torrentsRepository.getTorrentsList(offset, limit).filter {
+                        it.name.contains(query, ignoreCase = true)
                     }
 
             LoadResult.Page(
                 data = response,
-                prevKey = if (page == TORRENT_STARTING_PAGE_INDEX) null else page - 1,
-                nextKey = if (response.isEmpty()) null else page + 1,
+                prevKey = if (offset == TORRENT_STARTING_OFFSET) null else offset - limit,
+                nextKey = if (response.isEmpty()) null else offset + limit,
             )
         } catch (exception: IOException) {
             return LoadResult.Error(exception)

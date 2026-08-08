@@ -261,30 +261,13 @@ class MainActivity : AppCompatActivity() {
                     // this state should be managed by the fragments directly
                 }
 
-                FSMAuthenticationState.AuthenticatedOpenToken -> {
+                FSMAuthenticationState.Authenticated -> {
                     // unlock the bottom menu
                     enableAllBottomNavItems()
                     if (!checkedUpdate) {
                         checkedUpdate = true
                         viewModel.checkUpdates(BuildConfig.VERSION_CODE, getApplicationSignatures())
                     }
-                }
-
-                FSMAuthenticationState.RefreshingOpenToken -> {
-                    viewModel.refreshToken()
-                }
-
-                FSMAuthenticationState.AuthenticatedPrivateToken -> {
-                    // unlock the bottom menu
-                    enableAllBottomNavItems()
-                    if (!checkedUpdate) {
-                        checkedUpdate = true
-                        viewModel.checkUpdates(BuildConfig.VERSION_CODE, getApplicationSignatures())
-                    }
-                }
-
-                FSMAuthenticationState.WaitingToken -> {
-                    // this state should be managed by the fragments directly
                 }
 
                 FSMAuthenticationState.WaitingUserConfirmation -> {
@@ -294,10 +277,6 @@ class MainActivity : AppCompatActivity() {
                 is FSMAuthenticationState.WaitingUserAction -> {
                     // go back to the user/start fragment and disable the buttons.
                     when (authState.action) {
-                        UserAction.PERMISSION_DENIED -> showToast(R.string.permission_denied)
-                        UserAction.TFA_NEEDED -> showToast(R.string.tfa_needed)
-                        UserAction.TFA_PENDING -> showToast(R.string.tfa_pending)
-                        UserAction.IP_NOT_ALLOWED -> showToast(R.string.ip_Address_not_allowed)
                         UserAction.UNKNOWN -> showToast(R.string.generic_login_error)
                         UserAction.NETWORK_ERROR -> showToast(R.string.network_error)
                         UserAction.RETRY_LATER -> showToast(R.string.retry_later)
@@ -320,8 +299,7 @@ class MainActivity : AppCompatActivity() {
         // to avoid issues with restoring the app state we check the current state before calling
         // this
         when (viewModel.fsmAuthenticationState.value?.peekContent()) {
-            is FSMAuthenticationState.AuthenticatedPrivateToken,
-            FSMAuthenticationState.AuthenticatedOpenToken -> {
+            FSMAuthenticationState.Authenticated -> {
                 // we probably stopped and restored the app, do the same actions
                 // in the viewModel.fsmAuthenticationState.observe for these states
 
@@ -495,7 +473,7 @@ class MainActivity : AppCompatActivity() {
                                 content.downloads.forEach { download ->
                                     val queuedDownload =
                                         manager.downloadFileInStandardFolder(
-                                            source = download.download.toUri(),
+                                            source = download.link.toUri(),
                                             title = download.filename,
                                             description = getString(R.string.app_name),
                                             fileName = download.filename,
@@ -723,13 +701,8 @@ class MainActivity : AppCompatActivity() {
                 // could be because of the tap on a notification
                 intent.getStringExtra(KEY_TORRENT_ID)?.let { id ->
                     when (viewModel.getAuthenticationMachineState()) {
-                        FSMAuthenticationState.AuthenticatedOpenToken,
-                        FSMAuthenticationState.AuthenticatedPrivateToken -> {
+                        FSMAuthenticationState.Authenticated -> {
                             processTorrentNotificationIntent(id)
-                        }
-
-                        FSMAuthenticationState.RefreshingOpenToken -> {
-                            // todo: launch it after a delay
                         }
 
                         else -> {

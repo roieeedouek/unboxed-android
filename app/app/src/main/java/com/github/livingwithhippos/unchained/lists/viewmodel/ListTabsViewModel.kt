@@ -15,9 +15,10 @@ import androidx.paging.liveData
 import com.github.livingwithhippos.unchained.data.model.DownloadItem
 import com.github.livingwithhippos.unchained.data.model.TorrentItem
 import com.github.livingwithhippos.unchained.data.model.UnchainedNetworkException
+import com.github.livingwithhippos.unchained.data.model.WebDownloadItem
 import com.github.livingwithhippos.unchained.data.repository.DownloadRepository
 import com.github.livingwithhippos.unchained.data.repository.TorrentsRepository
-import com.github.livingwithhippos.unchained.data.repository.UnrestrictRepository
+import com.github.livingwithhippos.unchained.data.repository.WebDownloadRepository
 import com.github.livingwithhippos.unchained.lists.model.DownloadPagingSource
 import com.github.livingwithhippos.unchained.lists.model.TorrentPagingSource
 import com.github.livingwithhippos.unchained.utilities.DOWNLOADS_TAB
@@ -41,14 +42,14 @@ constructor(
     private val preferences: SharedPreferences,
     private val downloadRepository: DownloadRepository,
     private val torrentsRepository: TorrentsRepository,
-    private val unrestrictRepository: UnrestrictRepository,
+    private val webDownloadRepository: WebDownloadRepository,
 ) : ViewModel() {
 
     // stores the last query value
     private val queryLiveData = MutableLiveData<String>()
 
     // items are filtered returning only if their names contain the query
-    val downloadsLiveData: LiveData<PagingData<DownloadItem>> =
+    val downloadsLiveData: LiveData<PagingData<WebDownloadItem>> =
         queryLiveData.switchMap { query: String ->
             val size = getPagingSize()
             val initialSize = max(size, INITIAL_LOAD)
@@ -74,6 +75,8 @@ constructor(
 
     val downloadItemLiveData = MutableLiveData<Event<List<DownloadItem>>>()
 
+    val resolvedDownloadsLiveData = MutableLiveData<Event<ResolvedDownloadsResult>>()
+
     val deletedTorrentLiveData = MutableLiveData<Event<Int>>()
     val deletedDownloadLiveData = MutableLiveData<Event<Int>>()
 
@@ -83,13 +86,18 @@ constructor(
     val scrollToTopLiveData = MutableLiveData<Event<Int>>()
 
     /**
-     * Un restrict a torrent and move it to the download section
-     *
-     * @param torrent
+     * Requests a download link for every file of a torrent and moves it to the download section.
+     * Unlike RD there's no separate "unrestrict" call - a file is downloadable as soon as it's
+     * part of a torrent with [TorrentItem.downloadPresent], so this just mints a `requestdl` link
+     * per file.
      */
     fun unrestrictTorrent(torrent: TorrentItem) {
         viewModelScope.launch {
-            val items = unrestrictRepository.getUnrestrictedLinkList(torrent.links)
+            val files = torrent.files
+            if (files.isNullOrEmpty()) return@launch
+
+            val items =
+                torrentsRepository.getDownloadLinkList(files.map { Triple(torrent.id, it.id, it) })
             val values =
                 items.filterIsInstance<EitherResult.Success<DownloadItem>>().map { it.success }
             val errors =
@@ -98,6 +106,47 @@ constructor(
                 }
 
             downloadItemLiveData.postEvent(values)
+            if (errors.isNotEmpty()) errorsLiveData.postEvent(errors)
+        }
+    }
+
+    /**
+     * Resolves the single file of a webdl job into a direct link and opens it in the download
+     * details screen, mirroring what clicking an already-resolved link used to do on RD.
+     */
+    fun openWebDownload(item: WebDownloadItem) {
+        viewModelScope.launch {
+            val file = item.files?.singleOrNull()
+            when (
+                val result =
+                    webDownloadRepository.getDownloadLink(webId = item.id, fileId = file?.id, file = file)
+            ) {
+                is EitherResult.Success ->
+                    eventLiveData.postEvent(ListEvent.DownloadItemClick(result.success))
+                is EitherResult.Failure -> errorsLiveData.postEvent(listOf(result.failure))
+            }
+        }
+    }
+
+    /**
+     * Resolves a batch of webdl jobs' files into direct links for the "download selected"/"share
+     * selected" buttons, then posts the result tagged with which action triggered it.
+     */
+    fun resolveDownloadLinks(downloads: List<WebDownloadItem>, intent: DownloadIntent) {
+        viewModelScope.launch {
+            val files = downloads.flatMap { d -> (d.files ?: emptyList()).map { Triple(d.id, it.id, it) } }
+            if (files.isEmpty()) return@launch
+
+            val items = webDownloadRepository.getDownloadLinkList(files)
+            val values =
+                items.filterIsInstance<EitherResult.Success<DownloadItem>>().map { it.success }
+            val errors =
+                items.filterIsInstance<EitherResult.Failure<UnchainedNetworkException>>().map {
+                    it.failure
+                }
+
+            if (values.isNotEmpty())
+                resolvedDownloadsLiveData.postEvent(ResolvedDownloadsResult(intent, values))
             if (errors.isNotEmpty()) errorsLiveData.postEvent(errors)
         }
     }
@@ -123,12 +172,14 @@ constructor(
     fun deleteAllDownloads() {
         viewModelScope.launch {
             deletedDownloadLiveData.postEvent(0)
-            var page = 1
-            val completeDownloadList = mutableListOf<DownloadItem>()
+            var offset = 0
+            val pageSize = 50
+            val completeDownloadList = mutableListOf<WebDownloadItem>()
             do {
-                val downloads = downloadRepository.getDownloads(0, page++, 50)
+                val downloads = downloadRepository.getDownloads(offset, pageSize)
                 completeDownloadList.addAll(downloads)
-            } while (downloads.size >= 50)
+                offset += pageSize
+            } while (downloads.size >= pageSize)
 
             // post a message every 10% of the deletion progress if there are more than 10 items
             val progressIndicator: Int =
@@ -146,10 +197,13 @@ constructor(
 
     fun deleteAllTorrents() {
         viewModelScope.launch {
+            var offset = 0
+            val pageSize = 50
             do {
-                val torrents = torrentsRepository.getTorrentsList(0, 1, 50)
+                val torrents = torrentsRepository.getTorrentsList(offset, pageSize)
                 torrents.forEach { torrentsRepository.deleteTorrent(it.id) }
-            } while (torrents.size >= 50)
+                offset += pageSize
+            } while (torrents.size >= pageSize)
 
             deletedTorrentLiveData.postEvent(TORRENTS_DELETED_ALL)
         }
@@ -164,12 +218,10 @@ constructor(
     }
 
     fun downloadItems(torrents: List<TorrentItem>) {
-        torrents
-            .filter { it.status == "downloaded" || it.status == "ready" }
-            .forEach { unrestrictTorrent(it) }
+        torrents.filter { it.downloadPresent }.forEach { unrestrictTorrent(it) }
     }
 
-    fun deleteDownloads(downloads: List<DownloadItem>) {
+    fun deleteDownloads(downloads: List<WebDownloadItem>) {
         viewModelScope.launch {
             downloads.forEach { downloadRepository.deleteDownload(it.id) }
             if (downloads.size > 1) deletedDownloadLiveData.postEvent(DOWNLOADS_DELETED)
@@ -213,3 +265,10 @@ sealed class ListEvent {
 
     data object NewDownload : ListEvent()
 }
+
+enum class DownloadIntent {
+    DOWNLOAD,
+    SHARE,
+}
+
+data class ResolvedDownloadsResult(val intent: DownloadIntent, val items: List<DownloadItem>)

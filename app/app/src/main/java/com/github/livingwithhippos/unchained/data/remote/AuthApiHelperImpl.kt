@@ -1,23 +1,19 @@
 package com.github.livingwithhippos.unchained.data.remote
 
-import com.github.livingwithhippos.unchained.data.model.Authentication
-import com.github.livingwithhippos.unchained.data.model.Secrets
-import com.github.livingwithhippos.unchained.data.model.Token
+import com.github.livingwithhippos.unchained.data.model.DeviceAuthStart
+import com.github.livingwithhippos.unchained.data.model.DeviceToken
+import com.github.livingwithhippos.unchained.data.model.TorBoxEnvelope
 import javax.inject.Inject
 import retrofit2.Response
 
 class AuthApiHelperImpl @Inject constructor(private val authenticationApi: AuthenticationApi) :
     AuthApiHelper {
 
-    override suspend fun getAuthentication(): Response<Authentication> =
-        authenticationApi.getAuthentication()
+    override suspend fun startDeviceAuth(app: String): Response<TorBoxEnvelope<DeviceAuthStart>> =
+        authenticationApi.startDeviceAuth(app)
 
-    override suspend fun getSecrets(deviceCode: String): Response<Secrets> =
-        authenticationApi.getSecrets(deviceCode = deviceCode)
-
-    override suspend fun getToken(
-        clientId: String,
-        clientSecret: String,
-        code: String,
-    ): Response<Token> = authenticationApi.getToken(clientId, clientSecret, code)
+    override suspend fun pollDeviceToken(
+        deviceCode: String
+    ): Response<TorBoxEnvelope<DeviceToken>> =
+        authenticationApi.pollDeviceToken(DeviceTokenRequest(deviceCode))
 }

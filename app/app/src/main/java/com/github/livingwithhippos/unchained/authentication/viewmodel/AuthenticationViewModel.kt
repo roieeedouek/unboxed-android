@@ -4,23 +4,25 @@ import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.github.livingwithhippos.unchained.data.local.ProtoStore
-import com.github.livingwithhippos.unchained.data.model.Authentication
-import com.github.livingwithhippos.unchained.data.model.Secrets
-import com.github.livingwithhippos.unchained.data.model.Token
+import com.github.livingwithhippos.unchained.data.model.DeviceAuthStart
+import com.github.livingwithhippos.unchained.data.model.TorBoxApiError
 import com.github.livingwithhippos.unchained.data.repository.AuthenticationRepository
+import com.github.livingwithhippos.unchained.utilities.EitherResult
 import com.github.livingwithhippos.unchained.utilities.Event
 import com.github.livingwithhippos.unchained.utilities.postEvent
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
+import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlin.time.Duration.Companion.milliseconds
 
 /**
- * A [ViewModel] subclass. It offers LiveData to be observed during the authentication process and
- * uses the [AuthenticationRepository] to manage its process.
+ * A [ViewModel] subclass. It offers LiveData to be observed during the device-code authentication
+ * process and uses the [AuthenticationRepository] to manage it.
+ *
+ * Unlike RD's 3-step OAuth flow (link -> secrets -> token), TorBox's device flow is 2 steps: get a
+ * device code ([fetchAuthenticationInfo]), then poll for the resulting permanent token
+ * ([pollToken]) until the user authorizes it on TorBox's site.
  */
 @HiltViewModel
 class AuthenticationViewModel
@@ -28,82 +30,55 @@ class AuthenticationViewModel
 constructor(
     private val savedStateHandle: SavedStateHandle,
     private val authRepository: AuthenticationRepository,
-    private val protoStore: ProtoStore,
 ) : ViewModel() {
 
-    val authLiveData = MutableLiveData<Event<Authentication?>>()
-    val secretLiveData = MutableLiveData<Event<SecretResult>>()
-    val tokenLiveData = MutableLiveData<Event<Token?>>()
-
-    private val credentialsFlow = protoStore.credentialsFlow
+    val authLiveData = MutableLiveData<Event<DeviceAuthStart?>>()
+    val tokenLiveData = MutableLiveData<Event<TokenPollResult>>()
 
     fun fetchAuthenticationInfo() {
         viewModelScope.launch {
-            val authData = authRepository.getVerificationCode()
+            val authData = authRepository.startDeviceAuth(APP_NAME)
+            if (authData != null) savedStateHandle[KEY_DEVICE_CODE] = authData.deviceCode
             authLiveData.postEvent(authData)
         }
     }
 
-    fun fetchSecrets() {
-        // check how many calls we've made
-        val calls = savedStateHandle.get<Int>(SECRET_CALLS) ?: 0
-        val maxCalls = savedStateHandle.get<Int>(SECRET_CALLS_MAX) ?: 108
-        if (calls >= maxCalls) {
-            secretLiveData.postEvent(SecretResult.Expired)
-        } else {
-            viewModelScope.launch {
-                val credentials = credentialsFlow.first { it.deviceCode.isNotBlank() }
-                val secretData = authRepository.getSecrets(credentials.deviceCode)
-                if (secretData != null) secretLiveData.postEvent(SecretResult.Retrieved(secretData))
-                else {
-                    delay(SECRET_CALLS_DELAY.milliseconds)
-                    secretLiveData.postEvent(SecretResult.Empty)
+    /** Polls once for the token, waiting [interval] seconds beforehand as TorBox asks. */
+    fun pollToken(interval: Int) {
+        val deviceCode = savedStateHandle.get<String>(KEY_DEVICE_CODE)
+        if (deviceCode.isNullOrBlank()) {
+            tokenLiveData.postEvent(TokenPollResult.Expired)
+            return
+        }
+        viewModelScope.launch {
+            delay(interval.seconds)
+            when (val result = authRepository.pollDeviceToken(deviceCode)) {
+                is EitherResult.Success -> {
+                    tokenLiveData.postEvent(TokenPollResult.Retrieved(result.success.accessToken))
+                }
+                is EitherResult.Failure -> {
+                    val error = (result.failure as? TorBoxApiError)?.error
+                    if (error == "ITEM_NOT_FOUND") {
+                        tokenLiveData.postEvent(TokenPollResult.Expired)
+                    } else {
+                        // includes "DEVICE_CODE_NOT_USED": the user hasn't confirmed yet
+                        tokenLiveData.postEvent(TokenPollResult.Waiting)
+                    }
                 }
             }
         }
     }
 
-    fun fetchToken() {
-        viewModelScope.launch {
-            // todo: find a better way to get a single value and avoid empty ones
-            val credentials = protoStore.credentialsFlow.first { it.clientSecret.isNotBlank() }
-            val tokenData =
-                authRepository.getToken(
-                    credentials.clientId,
-                    credentials.clientSecret,
-                    credentials.deviceCode,
-                )
-            tokenLiveData.postEvent(tokenData)
-        }
-    }
-
-    /**
-     * @param expiresIn: the time in seconds before the deviceCode is not valid anymore for the
-     *   secrets endpoint
-     */
-    fun setupSecretLoop(expiresIn: Int) {
-        // this is just an estimate, keeping track of time would be more precise.
-        // As of now this value should be 120
-        var calls = (expiresIn * 1000 / SECRET_CALLS_DELAY).toInt() - 10
-        // remove 10% of the calls to account for the api calls
-        calls -= calls / 10
-        savedStateHandle[SECRET_CALLS_MAX] = calls
-        savedStateHandle[SECRET_CALLS] = 0
-    }
-
     companion object {
-        const val SECRET_CALLS = "secret_calls"
-        const val SECRET_CALLS_MAX = "max_secret_calls"
-
-        // 5 seconds is the value suggested by real debrid
-        const val SECRET_CALLS_DELAY = 5000L
+        const val APP_NAME = "Unchained"
+        const val KEY_DEVICE_CODE = "device_code_key"
     }
 }
 
-sealed class SecretResult {
-    data object Empty : SecretResult()
+sealed class TokenPollResult {
+    data object Waiting : TokenPollResult()
 
-    data object Expired : SecretResult()
+    data object Expired : TokenPollResult()
 
-    data class Retrieved(val value: Secrets) : SecretResult()
+    data class Retrieved(val accessToken: String) : TokenPollResult()
 }

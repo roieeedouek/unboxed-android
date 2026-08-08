@@ -126,20 +126,20 @@ class ForegroundTorrentService : LifecycleService() {
                 preferences.getStringSet(KEY_OBSERVED_TORRENTS, emptySet()) as Set<String>
             // their updated status
             val newLoadingTorrents = list.filter { torrent ->
-                loadingStatusList.contains(torrent.status.lowercase())
+                loadingStatusList.contains(torrent.downloadState.lowercase())
             }
             // the torrent whose status is not a loading one anymore.
             val finishedTorrents =
                 list
                     // They are in our old list
-                    .filter { oldTorrentsIDs.contains(it.id) }
+                    .filter { oldTorrentsIDs.contains(it.id.toString()) }
                     // They aren't in our new loading list
                     .filter { !newLoadingTorrents.map { newT -> newT.id }.contains(it.id) }
             /*
             // the new torrents to add to the notification system
             val unwatchedTorrents = newLoadingTorrents.filter { !oldTorrentsIDs.contains(it.id) }
             // the torrents not in our updated list anymore. These needs to be retrieved and analyzed singularly.
-            // Shouldn't happen often since there is a limit on how many active torrents you can have in real-debrid,
+            // Shouldn't happen often since there is a limit on how many active torrents you can have on TorBox,
             // and we retrieve the last 30 torrents every time
             val missingTorrents = oldTorrentsIDs.filter { id ->
                 !list.map { it.id }.contains(id)
@@ -151,7 +151,7 @@ class ForegroundTorrentService : LifecycleService() {
 
             // update the torrents id to observe
             val newIDs = mutableSetOf<String>()
-            newIDs.addAll(newLoadingTorrents.map { it.id })
+            newIDs.addAll(newLoadingTorrents.map { it.id.toString() })
             preferences.edit { putStringSet(KEY_OBSERVED_TORRENTS, newIDs) }
             updateTiming = if (newIDs.isEmpty()) UPDATE_TIMING_LONG else UPDATE_TIMING_SHORT
 
@@ -216,7 +216,7 @@ class ForegroundTorrentService : LifecycleService() {
                         // if there are no active torrents and the services has been started
                         // for at least some minutes, stop the service
                         val unfinishedTorrents = torrentList.count {
-                            loadingStatusList.contains(it.status)
+                            loadingStatusList.contains(it.downloadState)
                         }
                         if (unfinishedTorrents == 0) {
                             Timber.i(
@@ -244,22 +244,27 @@ class ForegroundTorrentService : LifecycleService() {
 
     private fun updateNotification(items: List<TorrentItem>) {
 
-        val notifications: MutableMap<String, Notification> = mutableMapOf()
+        val notifications: MutableMap<Long, Notification> = mutableMapOf()
 
         items.forEach { torrent ->
-            torrentBuilder.setStyle(NotificationCompat.BigTextStyle().bigText(torrent.filename))
+            torrentBuilder.setStyle(NotificationCompat.BigTextStyle().bigText(torrent.name))
 
-            if (torrent.status == "downloading") {
-                val speedMBs = (torrent.speed ?: 0).toFloat().div(1000000)
+            if (torrent.downloadState == "downloading") {
+                val speedMBs = (torrent.downloadSpeed ?: 0).toFloat().div(1000000)
+                val progressPercent = torrent.progress * 100
                 torrentBuilder
-                    .setProgress(100, torrent.progress.toInt(), false)
+                    .setProgress(100, progressPercent.toInt(), false)
                     .setContentTitle(
-                        getString(R.string.torrent_in_progress_format, torrent.progress, speedMBs)
+                        getString(
+                            R.string.torrent_in_progress_format,
+                            progressPercent,
+                            speedMBs,
+                        )
                     )
                     .setOngoing(true)
             } else {
                 torrentBuilder
-                    .setContentTitle(applicationContext.getStatusTranslation(torrent.status))
+                    .setContentTitle(applicationContext.getStatusTranslation(torrent.downloadState))
                     // note: this could be indeterminate = true since it's technically in a loading
                     // status
                     // which should change
@@ -270,7 +275,7 @@ class ForegroundTorrentService : LifecycleService() {
             val resultIntent =
                 Intent(this, MainActivity::class.java).apply {
                     flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-                    putExtra(KEY_TORRENT_ID, torrent.id)
+                    putExtra(KEY_TORRENT_ID, torrent.id.toString())
                 }
 
             val resultPendingIntent: PendingIntent? =
@@ -303,7 +308,7 @@ class ForegroundTorrentService : LifecycleService() {
         val resultIntent =
             Intent(this, MainActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-                putExtra(KEY_TORRENT_ID, item.id)
+                putExtra(KEY_TORRENT_ID, item.id.toString())
             }
 
         val resultPendingIntent: PendingIntent? =
@@ -319,9 +324,9 @@ class ForegroundTorrentService : LifecycleService() {
 
         notificationManager.apply {
             torrentBuilder
-                .setContentTitle(applicationContext.getStatusTranslation(item.status))
+                .setContentTitle(applicationContext.getStatusTranslation(item.downloadState))
                 // if the file is already downloaded the second row will not be set elsewhere
-                .setStyle(NotificationCompat.BigTextStyle().bigText(item.filename))
+                .setStyle(NotificationCompat.BigTextStyle().bigText(item.name))
                 // remove the progressbar if present
                 .setProgress(0, 0, false)
                 // set click intent

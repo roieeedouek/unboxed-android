@@ -24,17 +24,17 @@ import androidx.recyclerview.selection.StorageStrategy
 import androidx.recyclerview.widget.RecyclerView
 import com.github.livingwithhippos.unchained.R
 import com.github.livingwithhippos.unchained.base.UnchainedFragment
-import com.github.livingwithhippos.unchained.data.model.APIError
 import com.github.livingwithhippos.unchained.data.model.ApiConversionError
 import com.github.livingwithhippos.unchained.data.model.DownloadItem
 import com.github.livingwithhippos.unchained.data.model.EmptyBodyError
 import com.github.livingwithhippos.unchained.data.model.NetworkError
+import com.github.livingwithhippos.unchained.data.model.TorBoxApiError
 import com.github.livingwithhippos.unchained.databinding.FragmentFolderListBinding
 import com.github.livingwithhippos.unchained.folderlist.model.FolderDetailsLookup
 import com.github.livingwithhippos.unchained.folderlist.model.FolderItemAdapter
+import com.github.livingwithhippos.unchained.folderlist.model.FolderItemListener
 import com.github.livingwithhippos.unchained.folderlist.model.FolderKeyProvider
 import com.github.livingwithhippos.unchained.folderlist.viewmodel.FolderListViewModel
-import com.github.livingwithhippos.unchained.lists.view.DownloadListListener
 import com.github.livingwithhippos.unchained.utilities.extension.copyToClipboard
 import com.github.livingwithhippos.unchained.utilities.extension.delayedScrolling
 import com.github.livingwithhippos.unchained.utilities.extension.getThemedDrawable
@@ -45,7 +45,7 @@ import kotlinx.coroutines.launch
 import timber.log.Timber
 
 @AndroidEntryPoint
-class FolderListFragment : UnchainedFragment(), DownloadListListener {
+class FolderListFragment : UnchainedFragment(), FolderItemListener {
 
     private val viewModel: FolderListViewModel by viewModels()
     private val args: FolderListFragmentArgs by navArgs()
@@ -112,7 +112,7 @@ class FolderListFragment : UnchainedFragment(), DownloadListListener {
 
         if (!downloads.isNullOrEmpty()) {
             val downloadList = StringBuilder()
-            downloads.forEach { downloadList.appendLine(it.download) }
+            downloads.forEach { downloadList.appendLine(it.link) }
             val shareIntent = Intent(Intent.ACTION_SEND)
             shareIntent.type = "text/plain"
             shareIntent.putExtra(Intent.EXTRA_TEXT, downloadList.toString())
@@ -127,7 +127,7 @@ class FolderListFragment : UnchainedFragment(), DownloadListListener {
 
         if (!downloads.isNullOrEmpty()) {
             val downloadList = StringBuilder()
-            downloads.forEach { downloadList.appendLine(it.download) }
+            downloads.forEach { downloadList.appendLine(it.link) }
             copyToClipboard(getString(R.string.links), downloadList.toString())
             context?.showToast(R.string.link_copied)
         } else {
@@ -186,7 +186,7 @@ class FolderListFragment : UnchainedFragment(), DownloadListListener {
 
         binding.bDeleteSelected.setOnClickListener {
             if (linkTracker.selection.toList().isNotEmpty()) {
-                viewModel.deleteDownloadList(linkTracker.selection.toList())
+                viewModel.removeFromView(linkTracker.selection.toList())
             } else context?.showToast(R.string.select_one_item)
         }
 
@@ -195,7 +195,7 @@ class FolderListFragment : UnchainedFragment(), DownloadListListener {
             if (downloads.isNotEmpty()) {
                 if (downloads.size == 1) {
                     activityViewModel.enqueueDownload(
-                        downloads.first().download,
+                        downloads.first().link,
                         downloads.first().filename,
                     )
                 } else {
@@ -208,7 +208,7 @@ class FolderListFragment : UnchainedFragment(), DownloadListListener {
             if (linkTracker.selection.toList().isNotEmpty()) {
                 val shareIntent = Intent(Intent.ACTION_SEND)
                 shareIntent.type = "text/plain"
-                val shareLinks = linkTracker.selection.joinToString("\n") { it.download }
+                val shareLinks = linkTracker.selection.joinToString("\n") { it.link }
                 shareIntent.putExtra(Intent.EXTRA_TEXT, shareLinks)
                 startActivity(Intent.createChooser(shareIntent, getString(R.string.share_with)))
             } else context?.showToast(R.string.select_one_item)
@@ -222,7 +222,7 @@ class FolderListFragment : UnchainedFragment(), DownloadListListener {
             }
         }
 
-        viewModel.deletedDownloadLiveData.observe(viewLifecycleOwner) {
+        viewModel.removedDownloadLiveData.observe(viewLifecycleOwner) {
             Timber.d(it.toString())
             it.getContentIfNotHandled()?.let { item ->
                 val originalList = mutableListOf<DownloadItem>()
@@ -243,8 +243,8 @@ class FolderListFragment : UnchainedFragment(), DownloadListListener {
         viewModel.errorsLiveData.observe(viewLifecycleOwner) {
             it.getContentIfNotHandled()?.let { exception ->
                 when (exception) {
-                    is APIError -> {
-                        // val error = requireContext().getApiErrorMessage(exception.errorCode)
+                    is TorBoxApiError -> {
+                        // val error = requireContext().getApiErrorMessage(exception.error, exception.detail)
                         // requireContext().showToast(error)
                         binding.tvError.visibility = View.VISIBLE
                     }
@@ -292,14 +292,17 @@ class FolderListFragment : UnchainedFragment(), DownloadListListener {
 
         // load all the links
         when {
-            args.folder != null -> viewModel.retrieveFolderFileList(args.folder!!)
             args.torrent != null -> {
-                binding.tvTitle.text = args.torrent!!.filename
-                viewModel.retrieveFiles(args.torrent!!.links)
+                binding.tvTitle.text = args.torrent!!.name
+                viewModel.retrieveTorrentFiles(args.torrent!!.id, args.torrent!!.files ?: emptyList())
             }
 
-            args.linkList != null -> {
-                viewModel.retrieveFiles(args.linkList!!.toList())
+            args.webDownload != null -> {
+                binding.tvTitle.text = args.webDownload!!.name
+                viewModel.retrieveWebDownloadFiles(
+                    args.webDownload!!.id,
+                    args.webDownload!!.files ?: emptyList(),
+                )
             }
         }
     }

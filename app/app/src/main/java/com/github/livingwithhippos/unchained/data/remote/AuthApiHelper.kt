@@ -1,15 +1,13 @@
 package com.github.livingwithhippos.unchained.data.remote
 
-import com.github.livingwithhippos.unchained.data.model.Authentication
-import com.github.livingwithhippos.unchained.data.model.Secrets
-import com.github.livingwithhippos.unchained.data.model.Token
+import com.github.livingwithhippos.unchained.data.model.DeviceAuthStart
+import com.github.livingwithhippos.unchained.data.model.DeviceToken
+import com.github.livingwithhippos.unchained.data.model.TorBoxEnvelope
 import retrofit2.Response
 
 interface AuthApiHelper {
 
-    suspend fun getAuthentication(): Response<Authentication>
+    suspend fun startDeviceAuth(app: String): Response<TorBoxEnvelope<DeviceAuthStart>>
 
-    suspend fun getSecrets(deviceCode: String): Response<Secrets>
-
-    suspend fun getToken(clientId: String, clientSecret: String, code: String): Response<Token>
+    suspend fun pollDeviceToken(deviceCode: String): Response<TorBoxEnvelope<DeviceToken>>
 }

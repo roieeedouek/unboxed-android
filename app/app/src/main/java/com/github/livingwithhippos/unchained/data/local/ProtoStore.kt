@@ -6,35 +6,13 @@ interface ProtoStore {
 
     val credentialsFlow: Flow<Credentials.CurrentCredential>
 
-    suspend fun setCredentials(
-        deviceCode: String,
-        clientId: String? = null,
-        clientSecret: String? = null,
-        accessToken: String? = null,
-        refreshToken: String? = null,
-    )
+    /** Persists a freshly obtained, permanent TorBox API token, replacing any previous one. */
+    suspend fun setCredentials(accessToken: String, authMethod: String)
 
-    suspend fun updateCredentials(
-        deviceCode: String? = null,
-        clientId: String? = null,
-        clientSecret: String? = null,
-        accessToken: String? = null,
-        refreshToken: String? = null,
-    )
-
-    suspend fun updateDeviceCode(deviceCode: String)
-
-    suspend fun updateClientId(clientId: String)
-
-    suspend fun updateClientSecret(clientSecret: String)
-
+    /** Updates just the access token, e.g. after the user pastes a new one. */
     suspend fun updateAccessToken(accessToken: String)
 
-    suspend fun updateRefreshToken(refreshToken: String)
-
     suspend fun deleteCredentials()
-
-    suspend fun deleteIncompleteCredentials()
 
     suspend fun getCredentials(): Credentials.CurrentCredential
 }

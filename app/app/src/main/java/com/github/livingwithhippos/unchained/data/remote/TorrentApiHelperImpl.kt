@@ -1,43 +1,50 @@
 package com.github.livingwithhippos.unchained.data.remote
 
-import com.github.livingwithhippos.unchained.data.model.AvailableHost
+import com.github.livingwithhippos.unchained.data.model.CreatedTorrent
+import com.github.livingwithhippos.unchained.data.model.ItemControlRequest
+import com.github.livingwithhippos.unchained.data.model.TorBoxEnvelope
 import com.github.livingwithhippos.unchained.data.model.TorrentItem
-import com.github.livingwithhippos.unchained.data.model.UploadedTorrent
 import javax.inject.Inject
+import okhttp3.MultipartBody
 import okhttp3.RequestBody
 import retrofit2.Response
 
 class TorrentApiHelperImpl @Inject constructor(private val torrentsApi: TorrentsApi) :
     TorrentApiHelper {
-    override suspend fun getAvailableHosts(token: String): Response<List<AvailableHost>> =
-        torrentsApi.getAvailableHosts(token)
 
-    override suspend fun getTorrentInfo(token: String, id: String): Response<TorrentItem> =
-        torrentsApi.getTorrentInfo(token, id)
-
-    override suspend fun addTorrent(
+    override suspend fun createTorrent(
         token: String,
-        binaryTorrent: RequestBody,
-        host: String,
-    ): Response<UploadedTorrent> = torrentsApi.addTorrent(token, binaryTorrent, host)
+        file: MultipartBody.Part?,
+        magnet: RequestBody?,
+        name: RequestBody?,
+        seed: RequestBody?,
+        allowZip: RequestBody?,
+    ): Response<TorBoxEnvelope<CreatedTorrent>> =
+        torrentsApi.createTorrent(token, file, magnet, name, seed, allowZip)
 
-    override suspend fun addMagnet(
+    override suspend fun controlTorrent(
         token: String,
-        magnet: String,
-        host: String,
-    ): Response<UploadedTorrent> = torrentsApi.addMagnet(token, magnet, host)
+        body: ItemControlRequest,
+    ): Response<TorBoxEnvelope<Any?>> = torrentsApi.controlTorrent(token, body)
+
+    override suspend fun requestDownloadLink(
+        apiKey: String,
+        torrentId: Long,
+        fileId: Long?,
+        zipLink: Boolean?,
+    ): Response<TorBoxEnvelope<String>> =
+        torrentsApi.requestDownloadLink(apiKey, torrentId, fileId, zipLink)
 
     override suspend fun getTorrentsList(
         token: String,
+        bypassCache: Boolean?,
         offset: Int?,
-        page: Int?,
         limit: Int?,
-        filter: String?,
-    ): Response<List<TorrentItem>> = torrentsApi.getTorrentsList(token, offset, page, limit, filter)
+    ): Response<TorBoxEnvelope<List<TorrentItem>>> =
+        torrentsApi.getTorrentsList(token, bypassCache, offset, limit)
 
-    override suspend fun selectFiles(token: String, id: String, files: String) =
-        torrentsApi.selectFiles(token, id, files)
-
-    override suspend fun deleteTorrent(token: String, id: String) =
-        torrentsApi.deleteTorrent(token, id)
+    override suspend fun getTorrentInfo(
+        token: String,
+        id: Long,
+    ): Response<TorBoxEnvelope<TorrentItem>> = torrentsApi.getTorrentInfo(token, id)
 }

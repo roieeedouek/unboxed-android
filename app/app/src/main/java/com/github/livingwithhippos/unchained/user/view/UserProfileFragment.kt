@@ -12,10 +12,10 @@ import androidx.core.content.ContextCompat
 import androidx.core.content.PermissionChecker
 import androidx.core.content.edit
 import androidx.lifecycle.lifecycleScope
-import coil.load
 import com.github.livingwithhippos.unchained.R
 import com.github.livingwithhippos.unchained.base.UnchainedFragment
 import com.github.livingwithhippos.unchained.data.model.User
+import com.github.livingwithhippos.unchained.data.model.UserPlan
 import com.github.livingwithhippos.unchained.databinding.FragmentUserProfileBinding
 import com.github.livingwithhippos.unchained.settings.view.SettingsActivity
 import com.github.livingwithhippos.unchained.settings.view.SettingsFragment.Companion.KEY_REFERRAL_ASKED
@@ -26,6 +26,9 @@ import com.github.livingwithhippos.unchained.utilities.REFERRAL_LINK
 import com.github.livingwithhippos.unchained.utilities.extension.openExternalWebPage
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import dagger.hilt.android.AndroidEntryPoint
+import java.time.Duration
+import java.time.Instant
+import java.time.format.DateTimeParseException
 import javax.inject.Inject
 import kotlinx.coroutines.launch
 
@@ -117,9 +120,7 @@ class UserProfileFragment : UnchainedFragment() {
                         safeNavigate(action)
                     }
 
-                    FSMAuthenticationState.AuthenticatedOpenToken,
-                    FSMAuthenticationState.AuthenticatedPrivateToken,
-                    FSMAuthenticationState.RefreshingOpenToken -> {
+                    FSMAuthenticationState.Authenticated -> {
                         // managed by activity
                     }
 
@@ -128,7 +129,6 @@ class UserProfileFragment : UnchainedFragment() {
                     }
 
                     FSMAuthenticationState.Start,
-                    FSMAuthenticationState.WaitingToken,
                     FSMAuthenticationState.WaitingUserConfirmation -> {
                         // shouldn't happen
                     }
@@ -162,19 +162,36 @@ class UserProfileFragment : UnchainedFragment() {
     fun populateUserView(user: User?) {
         if (_binding == null) return
         user?.let {
-            binding.tvName.text = it.username
+            binding.tvName.text = getString(planNameRes(it.plan))
             binding.tvMail.text = it.email
-            // todo: check https://coil-kt.github.io/coil/image_loaders/#caching
-            binding.ivProfilePic.load(it.avatar) { crossfade(true) }
-            if (it.premium > 0) {
+            if (it.isSubscribed) {
                 binding.tvPremium.text = getString(R.string.premium)
             } else {
                 binding.tvPremium.text = getString(R.string.not_premium)
             }
+            val daysRemaining = daysUntil(it.premiumExpiresAt)
             binding.tvPremiumDays.text =
-                getString(R.string.premium_days_format, it.premium / 60 / 60 / 24)
-            binding.tvPoints.text = getString(R.string.premium_points_format, it.points)
-            binding.pointsBar.setProgressCompat(it.points, true)
+                if (daysRemaining != null) getString(R.string.premium_days_format, daysRemaining)
+                else ""
+        }
+    }
+
+    private fun planNameRes(plan: Int): Int =
+        when (plan) {
+            UserPlan.ESSENTIAL -> R.string.plan_essential
+            UserPlan.PRO -> R.string.plan_pro
+            UserPlan.STANDARD -> R.string.plan_standard
+            else -> R.string.plan_free
+        }
+
+    /** Days between now and [isoDate] (e.g. "2026-08-11T19:16:05Z"), or null if unset/unparsable. */
+    private fun daysUntil(isoDate: String?): Int? {
+        if (isoDate.isNullOrBlank()) return null
+        return try {
+            val expiration = Instant.parse(isoDate)
+            Duration.between(Instant.now(), expiration).toDays().toInt().coerceAtLeast(0)
+        } catch (e: DateTimeParseException) {
+            null
         }
     }
 }

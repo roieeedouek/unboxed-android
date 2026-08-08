@@ -25,15 +25,17 @@ import androidx.viewpager2.adapter.FragmentStateAdapter
 import androidx.viewpager2.widget.ViewPager2
 import com.github.livingwithhippos.unchained.R
 import com.github.livingwithhippos.unchained.base.UnchainedFragment
-import com.github.livingwithhippos.unchained.data.model.APIError
 import com.github.livingwithhippos.unchained.data.model.ApiConversionError
 import com.github.livingwithhippos.unchained.data.model.DownloadItem
 import com.github.livingwithhippos.unchained.data.model.EmptyBodyError
 import com.github.livingwithhippos.unchained.data.model.NetworkError
+import com.github.livingwithhippos.unchained.data.model.TorBoxApiError
 import com.github.livingwithhippos.unchained.data.model.TorrentItem
+import com.github.livingwithhippos.unchained.data.model.WebDownloadItem
 import com.github.livingwithhippos.unchained.databinding.FragmentDownloadsListBinding
 import com.github.livingwithhippos.unchained.databinding.FragmentTabListsBinding
 import com.github.livingwithhippos.unchained.databinding.FragmentTorrentsListBinding
+import com.github.livingwithhippos.unchained.lists.viewmodel.DownloadIntent
 import com.github.livingwithhippos.unchained.lists.viewmodel.ListEvent
 import com.github.livingwithhippos.unchained.lists.viewmodel.ListTabsViewModel
 import com.github.livingwithhippos.unchained.lists.viewmodel.ListTabsViewModel.Companion.DOWNLOADS_DELETED
@@ -49,7 +51,6 @@ import com.github.livingwithhippos.unchained.statemachine.authentication.FSMAuth
 import com.github.livingwithhippos.unchained.utilities.DOWNLOADS_TAB
 import com.github.livingwithhippos.unchained.utilities.EventObserver
 import com.github.livingwithhippos.unchained.utilities.TORRENTS_TAB
-import com.github.livingwithhippos.unchained.utilities.beforeSelectionStatusList
 import com.github.livingwithhippos.unchained.utilities.extension.delayedScrolling
 import com.github.livingwithhippos.unchained.utilities.extension.getApiErrorMessage
 import com.github.livingwithhippos.unchained.utilities.extension.getDownloadedFileUri
@@ -60,16 +61,16 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.tabs.TabLayout
 import com.google.android.material.tabs.TabLayoutMediator
 import dagger.hilt.android.AndroidEntryPoint
+import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import timber.log.Timber
-import kotlin.time.Duration.Companion.milliseconds
 
 /**
- * A simple [UnchainedFragment] subclass. It is capable of showing a list of both [DownloadItem] and
- * [TorrentItem] switched with a tab layout.
+ * A simple [UnchainedFragment] subclass. It is capable of showing a list of both [WebDownloadItem]
+ * and [TorrentItem] switched with a tab layout.
  */
 @AndroidEntryPoint
 class ListsTabFragment : UnchainedFragment() {
@@ -239,26 +240,44 @@ class ListsTabFragment : UnchainedFragment() {
                     }
 
                     is ListEvent.TorrentItemClick -> {
-                        when (event.item.status) {
-                            "downloaded",
-                            "ready" -> {
-                                if (event.item.links.size > 1) {
+                        val item = event.item
+                        when {
+                            // metadata not loaded yet, wait for it there
+                            item.files.isNullOrEmpty() -> {
+                                val action =
+                                    ListsTabFragmentDirections
+                                        .actionListTabsDestToTorrentProcessingFragment(
+                                            torrentID = item.id.toString()
+                                        )
+                                var loop = 0
+                                val controller = findNavController()
+                                lifecycleScope.launch {
+                                    while (
+                                        loop++ < 20 &&
+                                            controller.currentDestination?.id != R.id.list_tabs_dest
+                                    ) {
+                                        delay(100.milliseconds)
+                                    }
+                                    if (controller.currentDestination?.id == R.id.list_tabs_dest)
+                                        controller.navigate(action)
+                                }
+                            }
+
+                            item.downloadPresent -> {
+                                if (item.files!!.size > 1) {
                                     val action =
                                         ListsTabFragmentDirections
                                             .actionListTabsDestToFolderListFragment2(
-                                                folder = null,
-                                                torrent = event.item,
-                                                linkList = null,
+                                                torrent = item,
+                                                webDownload = null,
                                             )
                                     findNavController().navigate(action)
-                                } else viewModel.unrestrictTorrent(event.item)
+                                } else viewModel.unrestrictTorrent(item)
                             }
-                            // open the torrent details fragment
+                            // still downloading, files known: open the torrent details fragment
                             else -> {
                                 val action =
-                                    ListsTabFragmentDirections.actionListsTabToTorrentDetails(
-                                        event.item
-                                    )
+                                    ListsTabFragmentDirections.actionListsTabToTorrentDetails(item)
                                 var loop = 0
 
                                 val controller = findNavController()
@@ -323,20 +342,20 @@ class ListsTabFragment : UnchainedFragment() {
             EventObserver {
                 for (error in it) {
                     when (error) {
-                        is APIError -> {
-                            context?.let { c -> c.showToast(c.getApiErrorMessage(error.errorCode)) }
-                            when (error.errorCode) {
-                                8 -> {
-                                    // bad token, try refreshing it
-                                    if (
-                                        activityViewModel.getAuthenticationMachineState()
-                                            is FSMAuthenticationState.AuthenticatedOpenToken
+                        is TorBoxApiError -> {
+                            context?.let { c ->
+                                c.showToast(c.getApiErrorMessage(error.error, error.detail))
+                            }
+                            when (error.error) {
+                                "BAD_TOKEN",
+                                "NO_AUTH",
+                                "AUTH_ERROR" -> {
+                                    activityViewModel.transitionAuthenticationMachine(
+                                        FSMAuthenticationEvent.OnNotWorking
                                     )
-                                        activityViewModel.transitionAuthenticationMachine(
-                                            FSMAuthenticationEvent.OnExpiredOpenToken
-                                        )
-                                    context?.showToast(R.string.refreshing_token)
                                 }
+
+                                else -> {}
                             }
                         }
 
@@ -432,13 +451,13 @@ class DownloadsListFragment : UnchainedFragment(), DownloadListListener {
         binding.rvDownloadList.adapter = downloadAdapter
 
         // download list selection  tracker
-        val downloadTracker: SelectionTracker<DownloadItem> =
+        val downloadTracker: SelectionTracker<WebDownloadItem> =
             SelectionTracker.Builder(
                     "downloadListSelection",
                     binding.rvDownloadList,
                     DownloadKeyProvider(downloadAdapter),
                     DownloadDetailsLookup(binding.rvDownloadList),
-                    StorageStrategy.createParcelableStorage(DownloadItem::class.java),
+                    StorageStrategy.createParcelableStorage(WebDownloadItem::class.java),
                 )
                 .withSelectionPredicate(SelectionPredicates.createSelectAnything())
                 .build()
@@ -446,7 +465,7 @@ class DownloadsListFragment : UnchainedFragment(), DownloadListListener {
         downloadAdapter.tracker = downloadTracker
 
         downloadTracker.addObserver(
-            object : SelectionTracker.SelectionObserver<DownloadItem>() {
+            object : SelectionTracker.SelectionObserver<WebDownloadItem>() {
                 override fun onSelectionChanged() {
                     super.onSelectionChanged()
                     if (_binding == null) return
@@ -462,25 +481,15 @@ class DownloadsListFragment : UnchainedFragment(), DownloadListListener {
             else context?.showToast(R.string.select_one_item)
         }
         binding.bDownloadSelected.setOnClickListener {
-            val downloads: List<DownloadItem> = downloadTracker.selection.toList()
+            val downloads: List<WebDownloadItem> = downloadTracker.selection.toList()
             if (downloads.isNotEmpty()) {
-                if (downloads.size == 1) {
-                    activityViewModel.enqueueDownload(
-                        downloads.first().download,
-                        downloads.first().filename,
-                    )
-                } else {
-                    activityViewModel.enqueueDownloads(downloads)
-                }
+                viewModel.resolveDownloadLinks(downloads, DownloadIntent.DOWNLOAD)
             } else context?.showToast(R.string.select_one_item)
         }
         binding.bShareSelected.setOnClickListener {
-            if (downloadTracker.selection.toList().isNotEmpty()) {
-                val shareIntent = Intent(Intent.ACTION_SEND)
-                shareIntent.type = "text/plain"
-                val shareLinks = downloadTracker.selection.joinToString("\n") { it.download }
-                shareIntent.putExtra(Intent.EXTRA_TEXT, shareLinks)
-                startActivity(Intent.createChooser(shareIntent, getString(R.string.share_with)))
+            val downloads: List<WebDownloadItem> = downloadTracker.selection.toList()
+            if (downloads.isNotEmpty()) {
+                viewModel.resolveDownloadLinks(downloads, DownloadIntent.SHARE)
             } else context?.showToast(R.string.select_one_item)
         }
         binding.bAddNew?.setOnClickListener {
@@ -520,7 +529,7 @@ class DownloadsListFragment : UnchainedFragment(), DownloadListListener {
         // and
         // removes the loading icon from the swipe layout
         val downloadObserver =
-            Observer<PagingData<DownloadItem>> {
+            Observer<PagingData<WebDownloadItem>> {
                 if (_binding == null) return@Observer
                 viewLifecycleOwner.lifecycleScope.launch {
                     downloadAdapter.submitData(it)
@@ -544,8 +553,7 @@ class DownloadsListFragment : UnchainedFragment(), DownloadListListener {
         // authentication process is finished
         activityViewModel.fsmAuthenticationState.observe(viewLifecycleOwner) {
             when (it?.peekContent()) {
-                FSMAuthenticationState.AuthenticatedOpenToken,
-                FSMAuthenticationState.AuthenticatedPrivateToken -> {
+                FSMAuthenticationState.Authenticated -> {
                     // register observers if not already registered
                     if (!viewModel.downloadsLiveData.hasActiveObservers())
                         viewModel.downloadsLiveData.observe(viewLifecycleOwner, downloadObserver)
@@ -567,6 +575,32 @@ class DownloadsListFragment : UnchainedFragment(), DownloadListListener {
                     downloadAdapter.refresh()
 
                     viewModel.postEventNotice(ListEvent.SetTab(DOWNLOADS_TAB))
+                }
+            },
+        )
+
+        viewModel.resolvedDownloadsLiveData.observe(
+            viewLifecycleOwner,
+            EventObserver { result ->
+                when (result.intent) {
+                    DownloadIntent.DOWNLOAD -> {
+                        if (result.items.size == 1) {
+                            activityViewModel.enqueueDownload(
+                                result.items.first().link,
+                                result.items.first().filename,
+                            )
+                        } else {
+                            activityViewModel.enqueueDownloads(result.items)
+                        }
+                    }
+
+                    DownloadIntent.SHARE -> {
+                        val shareIntent = Intent(Intent.ACTION_SEND)
+                        shareIntent.type = "text/plain"
+                        val shareLinks = result.items.joinToString("\n") { it.link }
+                        shareIntent.putExtra(Intent.EXTRA_TEXT, shareLinks)
+                        startActivity(Intent.createChooser(shareIntent, getString(R.string.share_with)))
+                    }
                 }
             },
         )
@@ -650,8 +684,21 @@ class DownloadsListFragment : UnchainedFragment(), DownloadListListener {
         _binding = null
     }
 
-    override fun onClick(item: DownloadItem) {
-        viewModel.postEventNotice(ListEvent.DownloadItemClick(item))
+    override fun onClick(item: WebDownloadItem) {
+        val files = item.files
+        when {
+            files.isNullOrEmpty() -> context?.showToast(R.string.download_still_processing)
+            files.size > 1 -> {
+                val action =
+                    ListsTabFragmentDirections.actionListTabsDestToFolderListFragment2(
+                        torrent = null,
+                        webDownload = item,
+                    )
+                findNavController().navigate(action)
+            }
+
+            else -> viewModel.openWebDownload(item)
+        }
     }
 }
 
@@ -728,9 +775,9 @@ class TorrentsListFragment : UnchainedFragment(), TorrentListListener {
 
             val item: TorrentItem = torrentTracker.selection.toList().first()
             val action =
-                if (beforeSelectionStatusList.contains(item.status))
+                if (item.files.isNullOrEmpty())
                     ListsTabFragmentDirections.actionListTabsDestToTorrentProcessingFragment(
-                        torrentID = item.id
+                        torrentID = item.id.toString()
                     )
                 else ListsTabFragmentDirections.actionListsTabToTorrentDetails(item)
             findNavController().navigate(action)
@@ -780,8 +827,7 @@ class TorrentsListFragment : UnchainedFragment(), TorrentListListener {
         // authentication process is finished
         activityViewModel.fsmAuthenticationState.observe(viewLifecycleOwner) {
             when (it?.peekContent()) {
-                FSMAuthenticationState.AuthenticatedOpenToken,
-                FSMAuthenticationState.AuthenticatedPrivateToken -> {
+                FSMAuthenticationState.Authenticated -> {
                     // register observers if not already registered
                     if (!viewModel.torrentsLiveData.hasActiveObservers())
                         viewModel.torrentsLiveData.observe(viewLifecycleOwner, torrentObserver)
@@ -877,14 +923,12 @@ class TorrentsListFragment : UnchainedFragment(), TorrentListListener {
                 delay(100.milliseconds)
             }
 
-            if (item.status == "downloaded" || item.status == "ready") {
-                // unrestrict and move to download tab
-                if (item.links.size > 1) {
+            when {
+                item.files.isNullOrEmpty() -> {
+                    // metadata not loaded yet: go to torrent processing while it is still loading
                     val action =
-                        ListsTabFragmentDirections.actionListTabsDestToFolderListFragment2(
-                            folder = null,
-                            torrent = item,
-                            linkList = null,
+                        ListsTabFragmentDirections.actionListTabsDestToTorrentProcessingFragment(
+                            torrentID = item.id.toString()
                         )
                     if (controller.currentDestination?.id == R.id.list_tabs_dest)
                         controller.navigate(action)
@@ -892,28 +936,35 @@ class TorrentsListFragment : UnchainedFragment(), TorrentListListener {
                         Timber.e(
                             "Correct tab was not ready within 2 seconds after clicking torrent $item"
                         )
-                } else viewModel.unrestrictTorrent(item)
-            } else if (beforeSelectionStatusList.contains(item.status)) {
-                // go to torrent processing since it is still loading
-                val action =
-                    ListsTabFragmentDirections.actionListTabsDestToTorrentProcessingFragment(
-                        torrentID = item.id
-                    )
-                if (controller.currentDestination?.id == R.id.list_tabs_dest)
-                    controller.navigate(action)
-                else
-                    Timber.e(
-                        "Correct tab was not ready within 2 seconds after clicking torrent $item"
-                    )
-            } else {
-                // go to torrent details
-                val action = ListsTabFragmentDirections.actionListsTabToTorrentDetails(item)
-                if (controller.currentDestination?.id == R.id.list_tabs_dest)
-                    controller.navigate(action)
-                else
-                    Timber.e(
-                        "Correct tab was not ready within 2 seconds after clicking torrent $item"
-                    )
+                }
+
+                item.downloadPresent -> {
+                    // unrestrict and move to download tab
+                    if (item.files!!.size > 1) {
+                        val action =
+                            ListsTabFragmentDirections.actionListTabsDestToFolderListFragment2(
+                                torrent = item,
+                                webDownload = null,
+                            )
+                        if (controller.currentDestination?.id == R.id.list_tabs_dest)
+                            controller.navigate(action)
+                        else
+                            Timber.e(
+                                "Correct tab was not ready within 2 seconds after clicking torrent $item"
+                            )
+                    } else viewModel.unrestrictTorrent(item)
+                }
+
+                else -> {
+                    // go to torrent details
+                    val action = ListsTabFragmentDirections.actionListsTabToTorrentDetails(item)
+                    if (controller.currentDestination?.id == R.id.list_tabs_dest)
+                        controller.navigate(action)
+                    else
+                        Timber.e(
+                            "Correct tab was not ready within 2 seconds after clicking torrent $item"
+                        )
+                }
             }
         }
     }

@@ -49,7 +49,7 @@ constructor(protoStore: ProtoStore, @param:ClassicClient private val client: OkH
         try {
             val kodiApiHelper: KodiApiHelper = provideApiHelper("${addHttpScheme(baseUrl)}:$port/")
             val kodiResponse =
-                safeApiCall(
+                safeApiCallRaw(
                     call = {
                         kodiApiHelper.getVolume(
                             request =
@@ -78,7 +78,7 @@ constructor(protoStore: ProtoStore, @param:ClassicClient private val client: OkH
         try {
             val kodiApiHelper: KodiApiHelper = provideApiHelper(address)
             val kodiResponse =
-                safeApiCall(
+                safeApiCallRaw(
                     call = {
                         kodiApiHelper.getVolume(
                             request =
@@ -114,7 +114,7 @@ constructor(protoStore: ProtoStore, @param:ClassicClient private val client: OkH
                 else provideApiHelper("http://$baseUrl:$port/")
 
             val kodiResponse =
-                safeApiCall(
+                safeApiCallRaw(
                     call = {
                         kodiApiHelper.openUrl(
                             request =
@@ -148,7 +148,7 @@ constructor(protoStore: ProtoStore, @param:ClassicClient private val client: OkH
                 else provideApiHelper("$address/")
 
             val kodiResponse =
-                safeApiCall(
+                safeApiCallRaw(
                     call = {
                         kodiApiHelper.openUrl(
                             request =
@@ -188,7 +188,7 @@ constructor(protoStore: ProtoStore, @param:ClassicClient private val client: OkH
             val auth = encodeAuthentication(username, password)
 
             val activePlayers =
-                safeApiCall(
+                safeApiCallRaw(
                     call = {
                         kodiApiHelper.getActivePlayers(
                             request =
@@ -210,7 +210,7 @@ constructor(protoStore: ProtoStore, @param:ClassicClient private val client: OkH
             }
 
             val kodiResponse =
-                safeApiCall(
+                safeApiCallRaw(
                     call = {
                         kodiApiHelper.addSubtitle(
                             request =

@@ -1,34 +1,42 @@
 package com.github.livingwithhippos.unchained.data.remote
 
-import com.github.livingwithhippos.unchained.data.model.AvailableHost
+import com.github.livingwithhippos.unchained.data.model.CreatedTorrent
+import com.github.livingwithhippos.unchained.data.model.ItemControlRequest
+import com.github.livingwithhippos.unchained.data.model.TorBoxEnvelope
 import com.github.livingwithhippos.unchained.data.model.TorrentItem
-import com.github.livingwithhippos.unchained.data.model.UploadedTorrent
+import okhttp3.MultipartBody
 import okhttp3.RequestBody
 import retrofit2.Response
 
 interface TorrentApiHelper {
 
-    suspend fun getAvailableHosts(token: String): Response<List<AvailableHost>>
-
-    suspend fun getTorrentInfo(token: String, id: String): Response<TorrentItem>
-
-    suspend fun addTorrent(
+    suspend fun createTorrent(
         token: String,
-        binaryTorrent: RequestBody,
-        host: String,
-    ): Response<UploadedTorrent>
+        file: MultipartBody.Part?,
+        magnet: RequestBody?,
+        name: RequestBody?,
+        seed: RequestBody? = null,
+        allowZip: RequestBody? = null,
+    ): Response<TorBoxEnvelope<CreatedTorrent>>
 
-    suspend fun addMagnet(token: String, magnet: String, host: String): Response<UploadedTorrent>
+    suspend fun controlTorrent(
+        token: String,
+        body: ItemControlRequest,
+    ): Response<TorBoxEnvelope<Any?>>
+
+    suspend fun requestDownloadLink(
+        apiKey: String,
+        torrentId: Long,
+        fileId: Long?,
+        zipLink: Boolean? = null,
+    ): Response<TorBoxEnvelope<String>>
 
     suspend fun getTorrentsList(
         token: String,
-        offset: Int?,
-        page: Int?,
-        limit: Int?,
-        filter: String?,
-    ): Response<List<TorrentItem>>
+        bypassCache: Boolean? = null,
+        offset: Int? = null,
+        limit: Int? = null,
+    ): Response<TorBoxEnvelope<List<TorrentItem>>>
 
-    suspend fun selectFiles(token: String, id: String, files: String): Response<Unit>
-
-    suspend fun deleteTorrent(token: String, id: String): Response<Unit>
+    suspend fun getTorrentInfo(token: String, id: Long): Response<TorBoxEnvelope<TorrentItem>>
 }

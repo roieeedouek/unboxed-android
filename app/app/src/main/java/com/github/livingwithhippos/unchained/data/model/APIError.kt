@@ -1,16 +1,16 @@
 package com.github.livingwithhippos.unchained.data.model
 
-import com.squareup.moshi.Json
-import com.squareup.moshi.JsonClass
+/**
+ * A structured, non-2xx (or `success:false`) TorBox response, e.g.
+ * `{"success":false,"error":"BAD_TOKEN","detail":"Your token is invalid or has expired."}`.
+ *
+ * @property error TorBox's short machine-readable error code, e.g. "BAD_TOKEN". Null if the
+ *   server didn't provide one.
+ * @property detail a user-friendly message, safe to show directly, per TorBox's docs.
+ */
+data class TorBoxApiError(val error: String?, val detail: String?) : UnchainedNetworkException
 
-@JsonClass(generateAdapter = true)
-data class APIError(
-    @param:Json(name = "error") val error: String,
-    @param:Json(name = "error_details") val errorDetails: String?,
-    @param:Json(name = "error_code") val errorCode: Int?,
-) : UnchainedNetworkException
-
-// todo: this has been resolved by adding an interceptor, change class name at least
+/** A 2xx response whose envelope reported success but carried a null `data` payload. */
 data class EmptyBodyError(val returnCode: Int) : UnchainedNetworkException
 
 data class NetworkError(val error: Int, val message: String) : UnchainedNetworkException

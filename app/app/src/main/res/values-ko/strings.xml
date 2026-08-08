@@ -15,7 +15,6 @@
     <string name="link_loaded">인증 링크 로드됨</string>
     <string name="premium">프리미엄</string>
     <string name="not_premium">프리미엄 아님</string>
-    <string name="premium_points_format">프리미엄 포인트: %1$d/1000</string>
     <string name="premium_days_format">남은 기간: %1$d일</string>
     <string name="user">사용자</string>
     <string name="new_download">새 다운로드</string>
@@ -48,7 +47,7 @@
     <string name="load_streams">스트림 로드</string>
     <string name="quality">화질</string>
     <string name="links">링크</string>
-    <string name="add_private_token_message">https://real-debrid.com/apitoken 에서 개인 API 토큰을 가져와 사용할 수도 있습니다. 이를 통해 스트리밍과 같은 모든 기능을 활용할 수 있습니다.</string>
+    <string name="add_private_token_message">https://torbox.app/settings 에서 발급받은 API 키를 여기에 직접 붙여넣을 수도 있습니다.</string>
     <string name="add_private_token">개인 토큰 추가</string>
     <string name="save">저장</string>
     <string name="private_token">개인 토큰</string>
@@ -59,17 +58,11 @@
     <string name="error_loading_torrent">로드된 토렌트 없음</string>
     <string name="link_or_magnet">링크 또는 마그넷</string>
     <string name="status">상태</string>
-    <string name="magnet_error">마그넷 오류</string>
-    <string name="magnet_conversion">마그넷 변환</string>
-    <string name="waiting_files_selection">파일 선택 대기 중</string>
     <string name="queued">대기열에 추가됨</string>
     <string name="downloading">다운로드 중</string>
     <string name="downloaded">다운로드 완료</string>
     <string name="error">오류</string>
-    <string name="virus">바이러스</string>
-    <string name="compressing">압축 중</string>
     <string name="uploading">업로드 중</string>
-    <string name="dead">작동 안 함(Dead)</string>
     <string name="download">다운로드</string>
     <string name="lists">목록</string>
     <string name="torrent">토렌트</string>
@@ -83,50 +76,17 @@
     <string name="details">상세 정보</string>
     <string name="file_id_format">ID: %1$s</string>
     <string name="file_type_format">유형: %1$s</string>
-    <string name="rd_settings_link_description">사용자 설정, 프리미엄 상태 관리 및 계정 페이지에서 포인트를 변환하세요.</string>
+    <string name="rd_settings_link_description">TorBox 계정 페이지에서 사용자 설정 및 구독 플랜을 관리하세요.</string>
     <string name="settings">설정</string>
     <string name="content_description_settings">애플리케이션 설정</string>
     <string name="about">정보</string>
     <string name="content_description_about">앱 상세 정보</string>
     <string name="error_unrestricting_download">다운로드 제한 해제 중 오류 발생</string>
-    <string name="internal_error">내부 오류</string>
-    <string name="bad_parameter_value">잘못된 매개변수 값</string>
     <string name="missing_parameter">매개변수 누락</string>
-    <string name="unknown_method">알 수 없는 메서드</string>
-    <string name="method_not_allowed">허용되지 않는 메서드</string>
-    <string name="slow_down">속도를 줄이세요</string>
-    <string name="resource_unreachable">리소스에 도달할 수 없음</string>
-    <string name="resource_not_found">리소스를 찾을 수 없음</string>
-    <string name="bad_token">잘못된 토큰</string>
-    <string name="permission_denied">권한 거부됨</string>
-    <string name="tfa_needed">2단계 인증 필요</string>
-    <string name="tfa_pending">2단계 인증 대기 중</string>
-    <string name="invalid_login">잘못된 로그인</string>
-    <string name="invalid_password">잘못된 비밀번호</string>
-    <string name="account_locked">계정 잠김</string>
-    <string name="account_not_activated">계정이 활성화되지 않음</string>
-    <string name="unsupported_hoster">지원하지 않는 호스트</string>
-    <string name="hoster_in_maintenance">호스트 점검 중</string>
-    <string name="hoster_limit_reached">호스트 한도 도달</string>
-    <string name="hoster_temporarily_unavailable">호스트 일시적으로 사용 불가</string>
-    <string name="hoster_not_available_for_free_users">무료 사용자는 이용할 수 없는 호스트</string>
-    <string name="too_many_active_downloads">활성 다운로드가 너무 많음</string>
-    <string name="ip_Address_not_allowed">허용되지 않은 IP 주소</string>
-    <string name="traffic_exhausted">트래픽 소진됨</string>
-    <string name="file_unavailable">파일 사용 불가</string>
-    <string name="service_unavailable">서비스 사용 불가</string>
-    <string name="upload_too_big">업로드 용량 초과</string>
-    <string name="upload_error">업로드 오류</string>
-    <string name="file_not_allowed">허용되지 않는 파일</string>
-    <string name="torrent_too_big">토렌트 용량 초과</string>
-    <string name="torrent_file_invalid">유효하지 않은 토렌트 파일</string>
-    <string name="action_already_done">이미 완료된 작업</string>
-    <string name="image_resolution_error">이미지 해상도 오류</string>
-    <string name="torrent_already_active">이미 활성화된 토렌트</string>
     <string name="logout">로그아웃</string>
     <string name="account_page">계정 페이지</string>
-    <string name="login_type_open">오픈 토큰으로 로그인했습니다. 트랜스코딩과 같은 일부 기능을 사용할 수 없습니다.</string>
-    <string name="login_type_private">개인 토큰으로 로그인했습니다. 모든 기능을 사용할 수 있습니다.</string>
+    <string name="login_type_open">TorBox 기기 로그인 절차를 통해 로그인했습니다.</string>
+    <string name="login_type_private">TorBox API 키를 붙여넣어 로그인했습니다.</string>
     <string name="api_needs_private_token">이 기능은 개인 API 토큰이 필요합니다</string>
     <string name="torrents">토렌트</string>
     <string name="downloads">다운로드</string>
@@ -145,7 +105,7 @@
                     이 앱을 만드는 데 도움을 준 다양한 프로젝트, 리소스, 그리고 사람들이 있습니다. 감사의 말씀을 전합니다:
                     <br>
                     <ul>
-                    <li> Real Debrid 팀의 노고에 감사드립니다. </li>
+                    <li> TorBox 팀의 노고에 감사드립니다. </li>
                     <li> 앱의 구석구석을 테스트해 준 @oathzed </li>
                     <li> 로고와 심볼에 영감을 준 <a href="https://www.rawpixel.com/image/843352/minimal-logo-designs-set" target="_blank" rel="noopener noreferrer">미니멀 로고 디자인 세트</a>를 제공한 rawpixel.com </li>
                     </ul>
@@ -159,8 +119,8 @@
     <string name="please_login">계정에 로그인해 주세요</string>
     <string name="loading_magnet_link">마그넷 링크 로딩 중…</string>
     <string name="loading_torrent_file">토렌트 파일 로딩 중…</string>
-    <string name="unchained_torrent_download">Unchained 토렌트 다운로드</string>
-    <string name="unchained_plugin_download">Unchained 플러그인 다운로드</string>
+    <string name="unchained_torrent_download">Unboxed 토렌트 다운로드</string>
+    <string name="unchained_plugin_download">Unboxed 플러그인 다운로드</string>
     <string name="temporary_torrent_download">토렌트 파일 임시 다운로드</string>
     <string name="temporary_plugin_download">플러그인 파일 임시 다운로드</string>
     <string name="error_loading_dialog">대화상자를 로드하는 중 오류가 발생했습니다. 다시 열어주세요.</string>
@@ -319,7 +279,7 @@
     <string name="kodi_remote_control">Kodi 원격 제어 지침</string>
     <string name="enable_kodi_control">원격 제어를 위해 Kodi를 설정하는 방법을 보려면 여기를 누르세요 (보통 설정->서비스->제어에서 활성화)</string>
     <string name="only_if_auth">Kodi에서 인증이 활성화된 경우에만 필요함</string>
-    <string name="rd_status">Real Debrid 상태</string>
+    <string name="rd_status">TorBox 상태</string>
     <string name="show_kodi">Kodi 버튼 표시</string>
     <string name="only_big_files">큰 파일만</string>
     <string name="filter_type">미디어 파일만</string>
@@ -331,12 +291,12 @@
     <string name="loading_container_file">컨테이너 파일 로딩 중…</string>
     <string name="no_network_connection">네트워크 연결 없음</string>
     <string name="download_all">모두 다운로드</string>
-    <string name="sending_crash_report">Unchained가 방금 종료되었습니다.\n오류 보고서 전송 중…</string>
+    <string name="sending_crash_report">Unboxed가 방금 종료되었습니다.\n오류 보고서 전송 중…</string>
     <string name="upload">업로드</string>
     <string name="unsupported_file">지원하지 않는 파일</string>
     <string name="hoster">호스트(Hoster)</string>
     <string name="retry_login">재시도</string>
-    <string name="generic_login_error">로그인 중 오류가 발생했습니다. 연결 상태 확인 후 잠시 후 다시 시도하거나, real-debrid.com에 로그인이 가능한지 확인해보세요.</string>
+    <string name="generic_login_error">로그인 중 오류가 발생했습니다. 연결 상태 확인 후 잠시 후 다시 시도하거나, 자세한 정보는 torbox.app에서 확인해보세요.</string>
     <string name="retry_later">나중에 재시도</string>
     <string name="content_description_plugins_link">플러그인 페이지 링크</string>
     <string name="get_plugins">플러그인 더 보기</string>
@@ -363,7 +323,7 @@
     <string name="new_string">새로움</string>
     <string name="select_deselect_all">전체 선택 또는 해제</string>
     <string name="select_one_item">하나 이상의 항목을 선택하세요</string>
-    <string name="torrent_monitoring_description">Real-Debrid 서버에서 다운로드 중인 토렌트 모니터링</string>
+    <string name="torrent_monitoring_description">TorBox 서버에서 다운로드 중인 토렌트 모니터링</string>
     <string name="kodi_manage_list">Kodi 기기 관리</string>
     <string name="kodi_manage_list_summary">Kodi 기기 연결을 추가 또는 편집하고 기본 기기를 선택합니다.</string>
     <string name="add_device">기기 추가</string>
@@ -531,7 +491,7 @@
     <string name="refresh">새로고침</string>
     <string name="api_token">API 토큰</string>
     <string name="pick_search_type">검색 유형 선택</string>
-    <string name="plugin_search_description">Unchained 전용으로 제작된 커뮤니티 플러그인을 사용합니다. 무엇을 선택할지 모를 때 권장되는 기본 방법입니다.</string>
+    <string name="plugin_search_description">Unboxed 전용으로 제작된 커뮤니티 플러그인을 사용합니다. 무엇을 선택할지 모를 때 권장되는 기본 방법입니다.</string>
     <string name="plugins">플러그인</string>
     <string name="services_search_description">Jackett, Prowlarr 또는 기타 Torznab 앱과 같은 서비스를 사용합니다.</string>
     <string name="all">전체</string>

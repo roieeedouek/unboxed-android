@@ -30,9 +30,9 @@ class TorrentListPagingAdapter(private val listener: TorrentListListener) :
             // check the torrent progress
             return oldItem.progress == newItem.progress &&
                 // check the torrent status
-                oldItem.status == newItem.status &&
+                oldItem.downloadState == newItem.downloadState &&
                 // may be triggered by different cache
-                oldItem.bytes == newItem.bytes
+                oldItem.size == newItem.size
         }
     }
 
@@ -56,7 +56,7 @@ class TorrentListPagingAdapter(private val listener: TorrentListListener) :
         return super.getItem(position)
     }
 
-    fun getPosition(id: String) = snapshot().indexOfFirst { it?.id == id }
+    fun getPosition(id: Long) = snapshot().indexOfFirst { it?.id == id }
 }
 
 class TorrentViewHolder(
@@ -70,19 +70,18 @@ class TorrentViewHolder(
         mItem = item
         binding.selectionIndicator.visibility = if (selected) View.VISIBLE else View.GONE
 
-        if (item.status == "downloaded") {
-            // "ready" is used to make it clearer that the torrent is NOT downloaded on the phone
-            binding.tvTitle.text = binding.root.context.getStatusTranslation("ready")
-        } else binding.tvTitle.text = binding.root.context.getStatusTranslation(item.status)
-        if (item.progress >= 0 && item.progress < 100) {
+        binding.tvTitle.text = binding.root.context.getStatusTranslation(item.downloadState)
+        // progress is a 0.0-1.0 fraction on the wire, scale it to a percentage for display
+        val progressPercent = item.progress * 100
+        if (!item.downloadFinished && progressPercent >= 0 && progressPercent < 100) {
             binding.tvProgress.text =
-                itemView.context.getString(R.string.percent_format, item.progress)
+                itemView.context.getString(R.string.percent_format, progressPercent)
             binding.tvProgress.visibility = View.VISIBLE
         } else {
             binding.tvProgress.visibility = View.GONE
         }
-        binding.tvName.text = item.filename
-        binding.tvSize.text = getFileSizeString(itemView.context, item.bytes)
+        binding.tvName.text = item.name
+        binding.tvSize.text = getFileSizeString(itemView.context, item.size)
 
         binding.cvTorrent.setOnClickListener { listener.onClick(item) }
     }

@@ -30,7 +30,6 @@ import androidx.fragment.app.activityViewModels
 import androidx.fragment.app.setFragmentResultListener
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.coroutineScope
-import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
 import androidx.navigation.fragment.navArgs
 import coil.load
@@ -50,7 +49,6 @@ import com.github.livingwithhippos.unchained.downloaddetails.viewmodel.DownloadD
 import com.github.livingwithhippos.unchained.downloaddetails.viewmodel.DownloadEvent
 import com.github.livingwithhippos.unchained.lists.view.ListState
 import com.github.livingwithhippos.unchained.utilities.EventObserver
-import com.github.livingwithhippos.unchained.utilities.RD_STREAMING_URL
 import com.github.livingwithhippos.unchained.utilities.extension.copyToClipboard
 import com.github.livingwithhippos.unchained.utilities.extension.getAvailableSpace
 import com.github.livingwithhippos.unchained.utilities.extension.getFileSizeString
@@ -123,27 +121,22 @@ class DownloadDetailsFragment : UnchainedFragment(), DownloadDetailsListener {
             binding.tvMimeType.text = getString(R.string.file_type_format, args.details.mimeType)
             binding.tvMimeType.visibility = View.VISIBLE
         }
-        if (args.details.type == null) {
-            binding.tvType.visibility = View.GONE
-        } else {
-            binding.tvType.text = ": ${args.details.type}"
-            binding.tvType.visibility = View.VISIBLE
-        }
+        binding.tvType.visibility = View.GONE
         binding.fabShareLink.setOnClickListener {
             val shareIntent = Intent(Intent.ACTION_SEND)
             shareIntent.type = "text/plain"
-            shareIntent.putExtra(Intent.EXTRA_TEXT, args.details.download)
+            shareIntent.putExtra(Intent.EXTRA_TEXT, args.details.link)
             startActivity(Intent.createChooser(shareIntent, getString(R.string.share_with)))
         }
-        binding.fabOpenLink.setOnClickListener { onOpenClick(args.details.download) }
+        binding.fabOpenLink.setOnClickListener { onOpenClick(args.details.link) }
         binding.fabCopyLink.setOnClickListener {
-            copyToClipboard("Real-Debrid Download Link", args.details.download)
+            copyToClipboard(getString(R.string.torbox_download_link), args.details.link)
             context?.showToast(R.string.link_copied)
         }
         binding.fabDownloadLink.setOnClickListener {
-            onDownloadClick(args.details.download, args.details.filename)
+            onDownloadClick(args.details.link, args.details.filename)
         }
-        binding.fabSendToPlayer.setOnClickListener { onSendToPlayer(args.details.download) }
+        binding.fabSendToPlayer.setOnClickListener { onSendToPlayer(args.details.link) }
         if (!args.details.alternative.isNullOrEmpty()) {
             binding.rvAlternativeList.visibility = View.VISIBLE
         } else {
@@ -200,7 +193,7 @@ class DownloadDetailsFragment : UnchainedFragment(), DownloadDetailsListener {
             binding.llFabLoadStreams.visibility = View.GONE
         }
 
-        binding.fabLoadStreams.setOnClickListener { onLoadStreamsClick(args.details.id) }
+        binding.fabLoadStreams.setOnClickListener { onLoadStreamsClick() }
 
         if (args.details.alternative.isNullOrEmpty()) {
             binding.fabLoadStreams.isEnabled = false
@@ -219,43 +212,23 @@ class DownloadDetailsFragment : UnchainedFragment(), DownloadDetailsListener {
         }
 
         viewModel.streamLiveData.observe(viewLifecycleOwner) {
-            if (it != null) {
+            if (it != null && it.hlsUrl != null) {
                 binding.fabLoadStreams.isEnabled = false
                 binding.rvAlternativeList.visibility = View.VISIBLE
 
+                // TorBox streams are a single adaptive-bitrate HLS URL (not RD's list of
+                // quality-specific direct links), so there's just one entry to add - a full
+                // resolution/audio/subtitle picker feeding back into createStream would be a
+                // follow-up enhancement.
                 val streams = mutableListOf<Alternative>()
-                // parameter mimetype gets shown as the name and "streaming" as title in the list,
-                // the other
-                // params don't matter
                 streams.add(
                     Alternative(
-                        "h264WebM",
-                        "h264WebM",
-                        it.h264WebM.link,
+                        "hls",
+                        "hls",
+                        it.hlsUrl,
                         getString(R.string.streaming),
-                        "h264 WebM",
+                        "HLS",
                     )
-                )
-                streams.add(
-                    Alternative(
-                        "liveMP4",
-                        "liveMP4",
-                        it.liveMP4.link,
-                        getString(R.string.streaming),
-                        "mp4",
-                    )
-                )
-                streams.add(
-                    Alternative(
-                        "apple",
-                        "m3u8",
-                        it.apple.link,
-                        getString(R.string.streaming),
-                        "m3u8",
-                    )
-                )
-                streams.add(
-                    Alternative("dash", "mpd", it.dash.link, getString(R.string.streaming), "mpd")
                 )
 
                 if (!args.details.alternative.isNullOrEmpty())
@@ -278,7 +251,8 @@ class DownloadDetailsFragment : UnchainedFragment(), DownloadDetailsListener {
 
         setFragmentResultListener("deleteActionKey") { _, bundle ->
             // the delete operation is observed from the viewModel
-            if (bundle.getBoolean("deleteConfirmation")) viewModel.deleteDownload(args.details.id)
+            if (bundle.getBoolean("deleteConfirmation"))
+                viewModel.deleteDownload(args.details.contentId, args.details.contentType)
         }
 
         viewModel.messageLiveData.observe(viewLifecycleOwner) {
@@ -367,9 +341,8 @@ class DownloadDetailsFragment : UnchainedFragment(), DownloadDetailsListener {
             popup.menu.findItem(R.id.pick_service).isVisible = false
         }
 
-        if (url != null) {
-            popup.menu.findItem(R.id.browser_streaming).isVisible = false
-        }
+        // no known TorBox equivalent to RD's browser-streaming page, see [manageStreamingPopup]
+        popup.menu.findItem(R.id.browser_streaming).isVisible = false
 
         popup.setOnMenuItemClickListener { menuItem: MenuItem ->
             // save the new sorting preference
@@ -379,27 +352,23 @@ class DownloadDetailsFragment : UnchainedFragment(), DownloadDetailsListener {
 
                         val serviceType: RemoteServiceType =
                             serviceTypeMap[recentServiceItem.type]!!
-                        playOnService(url ?: args.details.download, recentServiceItem, serviceType)
+                        playOnService(url ?: args.details.link, recentServiceItem, serviceType)
                     }
                 }
 
                 R.id.default_service -> {
                     if (defaultService != null) {
                         val serviceType: RemoteServiceType = serviceTypeMap[defaultService.type]!!
-                        playOnService(url ?: args.details.download, defaultService, serviceType)
+                        playOnService(url ?: args.details.link, defaultService, serviceType)
                     }
                 }
 
                 R.id.pick_service -> {
                     val dialog = ServicePickerDialog()
                     val bundle = Bundle()
-                    bundle.putString("downloadUrl", url ?: args.details.download)
+                    bundle.putString("downloadUrl", url ?: args.details.link)
                     dialog.arguments = bundle
                     dialog.show(parentFragmentManager, "ServicePickerDialog")
-                }
-
-                R.id.browser_streaming -> {
-                    onBrowserStreamsClick(args.details.id)
                 }
             }
             true
@@ -446,7 +415,7 @@ class DownloadDetailsFragment : UnchainedFragment(), DownloadDetailsListener {
 
                 defaultLayout.setOnClickListener {
                     if (popup.isShowing) popup.dismiss()
-                    playOnService(url ?: args.details.download, defaultService, serviceType)
+                    playOnService(url ?: args.details.link, defaultService, serviceType)
                 }
             } else {
                 defaultLayout.visibility = View.GONE
@@ -475,7 +444,7 @@ class DownloadDetailsFragment : UnchainedFragment(), DownloadDetailsListener {
 
                     recentLayout.setOnClickListener {
                         if (popup.isShowing) popup.dismiss()
-                        playOnService(url ?: args.details.download, recentServiceItem, serviceType)
+                        playOnService(url ?: args.details.link, recentServiceItem, serviceType)
                     }
                 } else {
                     recentLayout.visibility = View.GONE
@@ -500,29 +469,22 @@ class DownloadDetailsFragment : UnchainedFragment(), DownloadDetailsListener {
 
             val dialog = ServicePickerDialog()
             val bundle = Bundle()
-            bundle.putString("downloadUrl", url ?: args.details.download)
+            bundle.putString("downloadUrl", url ?: args.details.link)
             dialog.arguments = bundle
             dialog.show(parentFragmentManager, "ServicePickerDialog")
         }
 
+        // no known TorBox equivalent to RD's browser-streaming page (a URL you could open
+        // directly), so this option is always hidden rather than guessed at
         val browserLayout =
             popup.contentView.findViewById<ConstraintLayout>(R.id.streamBrowserLayout)
-        // the url is passed when clicking on the streaming button in the transcoding list
-        // which has no "stream in browser" support
-        if (url != null) {
-            browserLayout.visibility = View.GONE
-        } else {
-            browserLayout.setOnClickListener {
-                context?.openExternalWebPage(RD_STREAMING_URL + args.details.id)
-                if (popup.isShowing) popup.dismiss()
-            }
-        }
+        browserLayout.visibility = View.GONE
     }
 
     private fun showAddSubtitleDialog() {
         val dialog = ServicePickerDialog()
         val bundle = Bundle()
-        bundle.putString("downloadUrl", args.details.download)
+        bundle.putString("downloadUrl", args.details.link)
         bundle.putBoolean("addSubtitle", true)
         dialog.arguments = bundle
         dialog.show(parentFragmentManager, "ServicePickerDialog")
@@ -613,7 +575,7 @@ class DownloadDetailsFragment : UnchainedFragment(), DownloadDetailsListener {
     }
 
     override fun onCopyClick(text: String) {
-        copyToClipboard("Real-Debrid Download Link", text)
+        copyToClipboard(getString(R.string.torbox_download_link), text)
         context?.showToast(R.string.link_copied)
     }
 
@@ -625,16 +587,14 @@ class DownloadDetailsFragment : UnchainedFragment(), DownloadDetailsListener {
         manageStreamingPopup(view, url)
     }
 
-    override fun onLoadStreamsClick(id: String) {
-        lifecycleScope.launch {
-            if (activityViewModel.isTokenPrivate()) {
-                viewModel.fetchStreamingInfo(args.details.id)
-            } else context?.showToast(R.string.api_needs_private_token)
-        }
-    }
-
-    override fun onBrowserStreamsClick(id: String) {
-        context?.openExternalWebPage(RD_STREAMING_URL + args.details.id)
+    override fun onLoadStreamsClick() {
+        // streaming is gated by TorBox's plan (premium), not by which auth method was used; a
+        // failure (e.g. free plan) surfaces as a null streamLiveData update, see its observer
+        viewModel.fetchStreamingInfo(
+            args.details.contentId,
+            args.details.fileId,
+            args.details.contentType,
+        )
     }
 
     override fun onDownloadClick(link: String, fileName: String) {

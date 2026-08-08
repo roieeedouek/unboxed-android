@@ -10,7 +10,6 @@ import com.github.livingwithhippos.unchained.data.local.KodiDeviceDao
 import com.github.livingwithhippos.unchained.data.local.RemoteDeviceDao
 import com.github.livingwithhippos.unchained.data.local.RepositoryDataDao
 import com.github.livingwithhippos.unchained.data.local.UnchaineDB
-import com.github.livingwithhippos.unchained.data.model.REGEX_TYPE_HOST
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -33,6 +32,7 @@ object DatabaseModule {
                 MIGRATION_3_4,
                 MIGRATION_8_9,
                 MIGRATION_9_10,
+                MIGRATION_10_11,
             )
             .build()
     }
@@ -74,9 +74,10 @@ object DatabaseModule {
     private val MIGRATION_2_3 =
         object : Migration(2, 3) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL(
-                    "ALTER TABLE host_regex ADD COLUMN type INTEGER NOT NULL DEFAULT $REGEX_TYPE_HOST"
-                )
+                // historical migration: "type" distinguished RD's host vs folder regexes, and no
+                // longer exists on the entity (see MIGRATION_10_11) - kept as a literal since the
+                // REGEX_TYPE_HOST constant it originally referenced is gone.
+                db.execSQL("ALTER TABLE host_regex ADD COLUMN type INTEGER NOT NULL DEFAULT 0")
             }
         }
 
@@ -101,6 +102,19 @@ object DatabaseModule {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL(
                     "ALTER TABLE complete_remote_service ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1"
+                )
+            }
+        }
+
+    private val MIGRATION_10_11 =
+        object : Migration(10, 11) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // host_regex is a disposable cache of hoster-matching regexes (re-fetched from
+                // TorBox's webdl/hosters endpoint), so it's safe to rebuild it from scratch now
+                // that RD's host-vs-folder regex distinction ("type" column) no longer applies.
+                db.execSQL("DROP TABLE IF EXISTS host_regex")
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `host_regex` (`regex` TEXT NOT NULL, PRIMARY KEY(`regex`))"
                 )
             }
         }

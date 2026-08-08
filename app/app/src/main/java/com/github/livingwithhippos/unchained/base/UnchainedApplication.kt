@@ -7,7 +7,6 @@ import android.content.Context
 import android.content.SharedPreferences
 import com.github.livingwithhippos.unchained.R
 import com.github.livingwithhippos.unchained.data.local.CompleteRemoteService
-import com.github.livingwithhippos.unchained.data.local.ProtoStore
 import com.github.livingwithhippos.unchained.data.local.RemoteDeviceDao
 import com.github.livingwithhippos.unchained.data.local.RepositoryDataDao
 import com.github.livingwithhippos.unchained.data.model.Repository
@@ -32,8 +31,6 @@ class UnchainedApplication : Application() {
 
     @Inject lateinit var activityCallback: ThemingCallback
 
-    @Inject lateinit var protoStore: ProtoStore
-
     @Inject lateinit var pluginRepositoryDataDao: RepositoryDataDao
     @Inject lateinit var legacyServiceRepository: RemoteDeviceDao
     @Inject lateinit var newServiceRepository: ServiceRepository
@@ -47,7 +44,6 @@ class UnchainedApplication : Application() {
         registerActivityLifecycleCallbacks(activityCallback)
 
         scope.launch {
-            protoStore.deleteIncompleteCredentials()
             if (pluginRepositoryDataDao.getDefaultRepository().isEmpty())
                 pluginRepositoryDataDao.insert(Repository(DEFAULT_PLUGINS_REPOSITORY_LINK))
             migrateServices()

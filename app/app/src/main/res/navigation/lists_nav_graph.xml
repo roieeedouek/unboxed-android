@@ -71,20 +71,18 @@
         android:label="@string/folder"
         tools:layout="@layout/fragment_folder_list">
         <argument
-            android:name="folder"
-            app:argType="string"
-            app:nullable="true" />
-        <argument
             android:name="torrent"
             app:argType="com.github.livingwithhippos.unchained.data.model.TorrentItem"
-            app:nullable="true" />
+            app:nullable="true"
+            android:defaultValue="@null" />
+        <argument
+            android:name="webDownload"
+            app:argType="com.github.livingwithhippos.unchained.data.model.WebDownloadItem"
+            app:nullable="true"
+            android:defaultValue="@null" />
         <action
             android:id="@+id/action_folderListFragment_to_download_details_dest"
             app:destination="@id/download_details_dest" />
-        <argument
-            android:name="linkList"
-            app:argType="string[]"
-            app:nullable="true" />
     </fragment>
     <fragment
         android:id="@+id/newDownloadFragment"

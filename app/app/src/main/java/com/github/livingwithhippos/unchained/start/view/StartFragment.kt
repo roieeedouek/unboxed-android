@@ -41,13 +41,7 @@ class StartFragment : UnchainedFragment() {
                             StartFragmentDirections.actionStartFragmentToAuthenticationFragment()
                         safeNavigate(action)
                     }
-                    FSMAuthenticationState.AuthenticatedOpenToken -> {
-                        val action =
-                            StartFragmentDirections.actionStartFragmentToUserProfileFragment()
-                        val navigated = safeNavigate(action)
-                        if (navigated) activityViewModel.goToStartUpScreen()
-                    }
-                    FSMAuthenticationState.AuthenticatedPrivateToken -> {
+                    FSMAuthenticationState.Authenticated -> {
                         val action =
                             StartFragmentDirections.actionStartFragmentToUserProfileFragment()
                         val navigated = safeNavigate(action)
@@ -63,12 +57,6 @@ class StartFragment : UnchainedFragment() {
                             (it.peekContent() as FSMAuthenticationState.WaitingUserAction).action
                         binding.tvErrorMessage.text =
                             when (actionNeeded) {
-                                UserAction.PERMISSION_DENIED ->
-                                    getString(R.string.permission_denied)
-                                UserAction.TFA_NEEDED -> getString(R.string.tfa_needed)
-                                UserAction.TFA_PENDING -> getString(R.string.tfa_pending)
-                                UserAction.IP_NOT_ALLOWED ->
-                                    getString(R.string.ip_Address_not_allowed)
                                 UserAction.UNKNOWN -> getString(R.string.generic_login_error)
                                 UserAction.NETWORK_ERROR -> getString(R.string.network_error)
                                 UserAction.RETRY_LATER -> getString(R.string.retry_later)

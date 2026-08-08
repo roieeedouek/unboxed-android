@@ -13,10 +13,9 @@ import androidx.recyclerview.widget.RecyclerView
 import com.github.livingwithhippos.unchained.R
 import com.github.livingwithhippos.unchained.data.model.DownloadItem
 import com.github.livingwithhippos.unchained.databinding.ItemListDownloadBinding
-import com.github.livingwithhippos.unchained.lists.view.DownloadListListener
 import com.github.livingwithhippos.unchained.utilities.extension.getFileSizeString
 
-class FolderItemAdapter(private val listener: DownloadListListener) :
+class FolderItemAdapter(private val listener: FolderItemListener) :
     ListAdapter<DownloadItem, ItemFolderViewHolder>(DiffCallback()) {
 
     var tracker: SelectionTracker<DownloadItem>? = null
@@ -53,7 +52,7 @@ class FolderItemAdapter(private val listener: DownloadListListener) :
 
 class ItemFolderViewHolder(
     private val binding: ItemListDownloadBinding,
-    private val listener: DownloadListListener,
+    private val listener: FolderItemListener,
 ) : RecyclerView.ViewHolder(binding.root) {
 
     var mItem: DownloadItem? = null
@@ -86,6 +85,15 @@ class FolderDetailsLookup(private val recyclerView: RecyclerView) :
         }
         return null
     }
+}
+
+/**
+ * Separate from [com.github.livingwithhippos.unchained.lists.view.DownloadListListener]: the
+ * folder screen shows already-resolved [DownloadItem] links, not the raw
+ * [com.github.livingwithhippos.unchained.data.model.WebDownloadItem] jobs the Downloads tab shows.
+ */
+interface FolderItemListener {
+    fun onClick(item: DownloadItem)
 }
 
 class FolderKeyProvider(private val adapter: FolderItemAdapter) :

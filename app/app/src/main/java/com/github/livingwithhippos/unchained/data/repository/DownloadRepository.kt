@@ -1,23 +1,36 @@
 package com.github.livingwithhippos.unchained.data.repository
 
 import com.github.livingwithhippos.unchained.data.local.ProtoStore
-import com.github.livingwithhippos.unchained.data.model.DownloadItem
-import com.github.livingwithhippos.unchained.data.remote.DownloadApiHelper
+import com.github.livingwithhippos.unchained.data.model.ItemControlRequest
+import com.github.livingwithhippos.unchained.data.model.TorrentOperation
+import com.github.livingwithhippos.unchained.data.model.UnchainedNetworkException
+import com.github.livingwithhippos.unchained.data.model.WebDownloadItem
+import com.github.livingwithhippos.unchained.data.remote.WebDownloadApiHelper
+import com.github.livingwithhippos.unchained.utilities.EitherResult
 import javax.inject.Inject
 
+/**
+ * Thin wrapper over the `webdl/mylist` endpoint, backing the "Downloads" tab. Unlike RD's flat,
+ * permanent link history (`GET downloads`), this is a list of webdl jobs - see
+ * [WebDownloadRepository] for the create/poll/requestdl flow that produces them.
+ */
 class DownloadRepository
 @Inject
 constructor(
     protoStore: ProtoStore,
-    private val downloadApiHelper: DownloadApiHelper,
-    private val unrestrictRepository: UnrestrictRepository,
+    private val webDownloadApiHelper: WebDownloadApiHelper,
+    private val webDownloadRepository: WebDownloadRepository,
 ) : BaseRepository(protoStore) {
-    suspend fun getDownloads(offset: Int?, page: Int = 1, limit: Int = 50): List<DownloadItem> {
 
+    suspend fun getDownloads(offset: Int? = null, limit: Int? = null): List<WebDownloadItem> {
         val downloadResponse =
             safeApiCall(
                 call = {
-                    downloadApiHelper.getDownloads("Bearer ${getToken()}", offset, page, limit)
+                    webDownloadApiHelper.getWebDownloadsList(
+                        token = "Bearer ${getToken()}",
+                        offset = offset,
+                        limit = limit,
+                    )
                 },
                 errorMessage = "Error Fetching Downloads list or list empty",
             )
@@ -25,18 +38,20 @@ constructor(
         return downloadResponse ?: emptyList()
     }
 
-    suspend fun deleteDownload(id: String): Unit? {
-
+    suspend fun deleteDownload(id: Long): EitherResult<UnchainedNetworkException, Unit> {
         val response =
-            safeApiCall(
+            eitherApiResultUnit(
                 call = {
-                    downloadApiHelper.deleteDownload(token = "Bearer ${getToken()}", id = id)
+                    webDownloadApiHelper.controlWebDownload(
+                        token = "Bearer ${getToken()}",
+                        body = ItemControlRequest(webId = id, operation = TorrentOperation.DELETE),
+                    )
                 },
                 errorMessage = "Error deleting download",
             )
 
-        if (response != null) {
-            unrestrictRepository.clearUnrestrictedLinkCache()
+        if (response is EitherResult.Success) {
+            webDownloadRepository.clearDownloadLinkCache()
         }
 
         return response
