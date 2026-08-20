@@ -476,9 +476,14 @@ class DownloadsListFragment : UnchainedFragment(), DownloadListListener {
 
         // listener for selection buttons
         binding.bDeleteSelected.setOnClickListener {
-            if (downloadTracker.selection.toList().isNotEmpty())
-                viewModel.deleteDownloads(downloadTracker.selection.toList())
-            else context?.showToast(R.string.select_one_item)
+            val downloads: List<WebDownloadItem> = downloadTracker.selection.toList()
+            if (downloads.isNotEmpty()) {
+                // clear right away: the selected items are about to be gone, and leaving them
+                // marked leaves the selection toolbar showing a stale count for items that no
+                // longer exist once the list refreshes
+                downloadTracker.clearSelection()
+                viewModel.deleteDownloads(downloads)
+            } else context?.showToast(R.string.select_one_item)
         }
         binding.bDownloadSelected.setOnClickListener {
             val downloads: List<WebDownloadItem> = downloadTracker.selection.toList()
@@ -634,16 +639,27 @@ class DownloadsListFragment : UnchainedFragment(), DownloadListListener {
                         // delete that actually went through server-side, see ListTabsViewModel's
                         // in-flight delete guard. Refresh so the list reflects true server state
                         // regardless.
-                        downloadAdapter.refresh()
+                        lifecycleScope.launch {
+                            // TorBox's own list endpoint can lag slightly behind a delete it just
+                            // confirmed, so refreshing instantly can still show the deleted item
+                            delay(300.milliseconds)
+                            downloadAdapter.refresh()
+                        }
                     }
                     DOWNLOAD_DELETED -> {
                         context?.showToast(R.string.download_removed)
-                        downloadAdapter.refresh()
+                        lifecycleScope.launch {
+                            delay(300.milliseconds)
+                            downloadAdapter.refresh()
+                        }
                     }
 
                     DOWNLOADS_DELETED -> {
                         context?.showToast(R.string.downloads_removed)
-                        downloadAdapter.refresh()
+                        lifecycleScope.launch {
+                            delay(300.milliseconds)
+                            downloadAdapter.refresh()
+                        }
                     }
 
                     DOWNLOADS_DELETED_ALL -> {
@@ -652,6 +668,7 @@ class DownloadsListFragment : UnchainedFragment(), DownloadListListener {
                             // if we don't refresh the cached copy of the last result will be
                             // restored on the
                             // first list redraw
+                            delay(300.milliseconds)
                             downloadAdapter.refresh()
                             downloadAdapter.submitData(PagingData.empty())
                         }
@@ -764,9 +781,14 @@ class TorrentsListFragment : UnchainedFragment(), TorrentListListener {
 
         // listener for selection buttons
         binding.bDeleteSelected.setOnClickListener {
-            if (torrentTracker.selection.toList().isNotEmpty())
-                viewModel.deleteTorrents(torrentTracker.selection.toList())
-            else context?.showToast(R.string.select_one_item)
+            val torrents: List<TorrentItem> = torrentTracker.selection.toList()
+            if (torrents.isNotEmpty()) {
+                // clear right away: the selected items are about to be gone, and leaving them
+                // marked leaves the selection toolbar showing a stale count for items that no
+                // longer exist once the list refreshes
+                torrentTracker.clearSelection()
+                viewModel.deleteTorrents(torrents)
+            } else context?.showToast(R.string.select_one_item)
         }
         binding.bDownloadSelected.setOnClickListener {
             if (torrentTracker.selection.toList().isNotEmpty()) {
@@ -852,11 +874,19 @@ class TorrentsListFragment : UnchainedFragment(), TorrentListListener {
                         // delete that actually went through server-side, see ListTabsViewModel's
                         // in-flight delete guard. Refresh so the list reflects true server state
                         // regardless.
-                        torrentAdapter.refresh()
+                        lifecycleScope.launch {
+                            // TorBox's own list endpoint can lag slightly behind a delete it just
+                            // confirmed, so refreshing instantly can still show the deleted item
+                            delay(300.milliseconds)
+                            torrentAdapter.refresh()
+                        }
                     }
                     TORRENT_DELETED -> {
                         context?.showToast(R.string.torrent_removed)
-                        torrentAdapter.refresh()
+                        lifecycleScope.launch {
+                            delay(300.milliseconds)
+                            torrentAdapter.refresh()
+                        }
                     }
 
                     TORRENTS_DELETED_ALL -> {
@@ -865,6 +895,7 @@ class TorrentsListFragment : UnchainedFragment(), TorrentListListener {
                             // if we don't refresh the cached copy of the last result will be
                             // restored on the
                             // first list redraw
+                            delay(300.milliseconds)
                             torrentAdapter.refresh()
                             torrentAdapter.submitData(PagingData.empty())
                         }
@@ -872,7 +903,10 @@ class TorrentsListFragment : UnchainedFragment(), TorrentListListener {
 
                     TORRENTS_DELETED -> {
                         context?.showToast(R.string.torrents_removed)
-                        torrentAdapter.refresh()
+                        lifecycleScope.launch {
+                            delay(300.milliseconds)
+                            torrentAdapter.refresh()
+                        }
                     }
 
                     0 -> {
