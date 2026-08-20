@@ -206,12 +206,15 @@ constructor(
             val progressIndicator: Int =
                 if (completeDownloadList.size / 10 < 15) 15 else completeDownloadList.size / 10
 
+            val errors = mutableListOf<UnchainedNetworkException>()
             completeDownloadList.forEachIndexed { index, item ->
-                downloadRepository.deleteDownload(item.id)
+                val result = downloadRepository.deleteDownload(item.id)
+                if (result is EitherResult.Failure) errors.add(result.failure)
                 if ((index + 1) % progressIndicator == 0)
                     deletedDownloadLiveData.postEvent(index + 1)
             }
 
+            if (errors.isNotEmpty()) errorsLiveData.postEvent(errors)
             deletedDownloadLiveData.postEvent(DOWNLOADS_DELETED_ALL)
         }
     }
@@ -220,21 +223,38 @@ constructor(
         viewModelScope.launch {
             var offset = 0
             val pageSize = 50
+            val errors = mutableListOf<UnchainedNetworkException>()
             do {
                 val torrents = torrentsRepository.getTorrentsList(offset, pageSize)
-                torrents.forEach { torrentsRepository.deleteTorrent(it.id) }
+                torrents.forEach { torrent ->
+                    val result = torrentsRepository.deleteTorrent(torrent.id)
+                    if (result is EitherResult.Failure) errors.add(result.failure)
+                }
                 offset += pageSize
             } while (torrents.size >= pageSize)
 
+            if (errors.isNotEmpty()) errorsLiveData.postEvent(errors)
             deletedTorrentLiveData.postEvent(TORRENTS_DELETED_ALL)
         }
     }
 
     fun deleteTorrents(torrents: List<TorrentItem>) {
         viewModelScope.launch {
-            torrents.forEach { torrentsRepository.deleteTorrent(it.id) }
-            if (torrents.size > 1) deletedTorrentLiveData.postEvent(TORRENTS_DELETED)
-            else deletedTorrentLiveData.postEvent(TORRENT_DELETED)
+            val results = torrents.map { torrentsRepository.deleteTorrent(it.id) }
+            val errors =
+                results.filterIsInstance<EitherResult.Failure<UnchainedNetworkException>>().map {
+                    it.failure
+                }
+            val deletedCount = results.count { it is EitherResult.Success }
+
+            if (errors.isNotEmpty()) errorsLiveData.postEvent(errors)
+            deletedTorrentLiveData.postEvent(
+                when {
+                    deletedCount == 0 -> TORRENT_NOT_DELETED
+                    torrents.size > 1 -> TORRENTS_DELETED
+                    else -> TORRENT_DELETED
+                }
+            )
         }
     }
 
@@ -244,9 +264,21 @@ constructor(
 
     fun deleteDownloads(downloads: List<WebDownloadItem>) {
         viewModelScope.launch {
-            downloads.forEach { downloadRepository.deleteDownload(it.id) }
-            if (downloads.size > 1) deletedDownloadLiveData.postEvent(DOWNLOADS_DELETED)
-            else deletedDownloadLiveData.postEvent(DOWNLOAD_DELETED)
+            val results = downloads.map { downloadRepository.deleteDownload(it.id) }
+            val errors =
+                results.filterIsInstance<EitherResult.Failure<UnchainedNetworkException>>().map {
+                    it.failure
+                }
+            val deletedCount = results.count { it is EitherResult.Success }
+
+            if (errors.isNotEmpty()) errorsLiveData.postEvent(errors)
+            deletedDownloadLiveData.postEvent(
+                when {
+                    deletedCount == 0 -> DOWNLOAD_NOT_DELETED
+                    downloads.size > 1 -> DOWNLOADS_DELETED
+                    else -> DOWNLOAD_DELETED
+                }
+            )
         }
     }
 

@@ -175,6 +175,7 @@
     <string name="seeders_string_format">seeder/s: %s</string>
     <string name="torrent_in_progress_format">%1$.2f%% - %2$.2f MB/s</string>
     <string name="download_in_progress_format">다운로드 중 - %1$d%%</string>
+    <string name="download_failed_format">%s 다운로드 실패</string>
     <string name="download_complete">다운로드 완료</string>
     <string name="unknown_status">확인 불가</string>
     <string name="downloading_torrent_format">%1$d개의 토렌트 다운로드 중</string>
@@ -266,6 +267,7 @@
     <string name="download_not_started_format">%s 다운로드 초기화 오류</string>
     <string name="multiple_downloads_enqueued_format">%2$d개 중 %1$d개의 다운로드가 정상적으로 대기열에 추가되었습니다.</string>
     <string name="needs_download_permission">파일을 직접 다운로드하려면 파일 저장 권한이 필요합니다</string>
+    <string name="needs_local_network_permission">\'Unboxed\'는 네트워크에 있는 미디어 파일을 재생하기 위해 로컬 네트워크 권한이 필요합니다.</string>
     <string name="test_connection">연결 테스트</string>
     <string name="kodi_credentials_incomplete">Kodi 사용을 위해 IP 주소와 port 정보 입력이 필요합니다</string>
     <string name="ip_address">IP 주소</string>

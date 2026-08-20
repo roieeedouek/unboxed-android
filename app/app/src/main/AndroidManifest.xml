@@ -16,6 +16,19 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.ACCESS_LOCAL_NETWORK" />
+
+    <!-- Android 11+ hides other apps from PackageManager unless declared here. We resolve and
+    launch whatever app the user has set as their default video player, so instead of listing
+    every known player package (which needed constant upkeep and was always incomplete) we
+    declare the intent those players answer. This makes any current or future video player
+    visible to resolveActivity/startActivity without further maintenance. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:mimeType="video/*" />
+        </intent>
+    </queries>
 
     <application
         android:name=".base.UnchainedApplication"

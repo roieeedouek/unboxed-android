@@ -173,6 +173,7 @@
     <string name="seeders_string_format">seeder/s: %s</string>
     <string name="torrent_in_progress_format">%1$.2f%% - %2$.2f MB/s</string>
     <string name="download_in_progress_format">Descargando - %1$d%%</string>
+    <string name="download_failed_format">La descarga de %s ha fallado</string>
     <string name="download_complete">Descarga completa</string>
     <string name="unknown_status">Estado desconocido</string>
     <string name="downloading_torrent_format">Descargando %1$d torrents</string>
@@ -263,6 +264,7 @@
     <string name="download_not_started_format">Error al inicializar la descarga de %s</string>
     <string name="multiple_downloads_enqueued_format">%1$d de %2$d descargas en cola correctamente</string>
     <string name="needs_download_permission">Unboxed necesita el permiso de almacenamiento para descargar archivos directamente</string>
+    <string name="needs_local_network_permission">Unboxed necesita permiso para acceder a la red local a fin de reproducir archivos multimedia en tu red</string>
     <string name="test_connection">Probar la conexión</string>
     <string name="kodi_credentials_incomplete">Al menos la IP y el puerto son necesarios para Kodi</string>
     <string name="ip_address">Dirección IP</string>
