@@ -111,6 +111,27 @@ constructor(
     }
 
     /**
+     * Resolves the single file of a torrent into a direct link and opens it in the download
+     * details screen. Unlike [unrestrictTorrent] (built for the bulk "download selected" case,
+     * where there's no single screen to navigate to), a single-file torrent click needs to
+     * actually take the user somewhere - posting to [downloadItemLiveData] alone is a dead end,
+     * since nothing observes it to open a details screen.
+     */
+    fun openTorrentFile(torrent: TorrentItem) {
+        viewModelScope.launch {
+            val file = torrent.files?.singleOrNull()
+            when (
+                val result =
+                    torrentsRepository.getDownloadLink(torrentId = torrent.id, fileId = file?.id, file = file)
+            ) {
+                is EitherResult.Success ->
+                    eventLiveData.postEvent(ListEvent.DownloadItemClick(result.success))
+                is EitherResult.Failure -> errorsLiveData.postEvent(listOf(result.failure))
+            }
+        }
+    }
+
+    /**
      * Resolves the single file of a webdl job into a direct link and opens it in the download
      * details screen, mirroring what clicking an already-resolved link used to do on RD.
      */

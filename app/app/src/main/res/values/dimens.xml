@@ -5,4 +5,5 @@
     <dimen name="stat_card_elevation">10dp</dimen>
     <dimen name="custom_color_swatch_size">44dp</dimen>
     <dimen name="custom_color_swatch_margin">12dp</dimen>
+    <dimen name="focus_stroke_width">3dp</dimen>
 </resources>

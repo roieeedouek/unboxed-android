@@ -2,8 +2,6 @@ package com.github.livingwithhippos.unchained.downloaddetails.view
 
 import android.annotation.SuppressLint
 import android.app.UiModeManager
-import android.content.ActivityNotFoundException
-import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
@@ -52,7 +50,10 @@ import com.github.livingwithhippos.unchained.utilities.EventObserver
 import com.github.livingwithhippos.unchained.utilities.extension.copyToClipboard
 import com.github.livingwithhippos.unchained.utilities.extension.getAvailableSpace
 import com.github.livingwithhippos.unchained.utilities.extension.getFileSizeString
+import com.github.livingwithhippos.unchained.utilities.extension.isTv
 import com.github.livingwithhippos.unchained.utilities.extension.openExternalWebPage
+import com.github.livingwithhippos.unchained.utilities.extension.openMediaWithChooser
+import com.github.livingwithhippos.unchained.utilities.extension.playWithPreferredVideoPlayer
 import com.github.livingwithhippos.unchained.utilities.extension.showToast
 import com.github.livingwithhippos.unchained.utilities.extensionIconMap
 import dagger.hilt.android.AndroidEntryPoint
@@ -136,6 +137,9 @@ class DownloadDetailsFragment : UnchainedFragment(), DownloadDetailsListener {
         binding.fabDownloadLink.setOnClickListener {
             onDownloadClick(args.details.link, args.details.filename)
         }
+        binding.fabOpenWith.setOnClickListener {
+            context?.openMediaWithChooser(args.details.link, args.details.mimeType)
+        }
         binding.fabSendToPlayer.setOnClickListener { onSendToPlayer(args.details.link) }
         if (!args.details.alternative.isNullOrEmpty()) {
             binding.rvAlternativeList.visibility = View.VISIBLE
@@ -157,7 +161,13 @@ class DownloadDetailsFragment : UnchainedFragment(), DownloadDetailsListener {
             binding.llFabShare.visibility = View.GONE
         }
 
-        if (viewModel.getButtonVisibilityPreference(SHOW_OPEN_BUTTON)) {
+        // on tv the open button triggers the same chooser as the open with one for streamable
+        // files, so showing both would be duplicated
+        val openDuplicatesOpenWith =
+            requireContext().isTv() &&
+                args.details.streamable == 1 &&
+                viewModel.getButtonVisibilityPreference(SHOW_OPEN_WITH_BUTTON)
+        if (viewModel.getButtonVisibilityPreference(SHOW_OPEN_BUTTON) && !openDuplicatesOpenWith) {
             binding.llFabOpen.visibility = View.VISIBLE
         } else {
             binding.llFabOpen.visibility = View.GONE
@@ -176,6 +186,10 @@ class DownloadDetailsFragment : UnchainedFragment(), DownloadDetailsListener {
         }
 
         if (args.details.streamable == 1) {
+            if (viewModel.getButtonVisibilityPreference(SHOW_OPEN_WITH_BUTTON))
+                binding.llFabOpenWith.visibility = View.VISIBLE
+            else binding.llFabOpenWith.visibility = View.GONE
+
             if (viewModel.getButtonVisibilityPreference(SHOW_MEDIA_BUTTON))
                 binding.llFabSendToPlayer.visibility = View.VISIBLE
             else binding.llFabSendToPlayer.visibility = View.GONE
@@ -188,6 +202,7 @@ class DownloadDetailsFragment : UnchainedFragment(), DownloadDetailsListener {
                 binding.llFabLoadStreams.visibility = View.VISIBLE
             else binding.llFabLoadStreams.visibility = View.GONE
         } else {
+            binding.llFabOpenWith.visibility = View.GONE
             binding.llFabSendToPlayer.visibility = View.GONE
             binding.llFabPickStreaming.visibility = View.GONE
             binding.llFabLoadStreams.visibility = View.GONE
@@ -370,6 +385,13 @@ class DownloadDetailsFragment : UnchainedFragment(), DownloadDetailsListener {
                     dialog.arguments = bundle
                     dialog.show(parentFragmentManager, "ServicePickerDialog")
                 }
+
+                R.id.open_with_player -> {
+                    context?.openMediaWithChooser(
+                        url ?: args.details.link,
+                        if (url == null) args.details.mimeType else null,
+                    )
+                }
             }
             true
         }
@@ -474,6 +496,15 @@ class DownloadDetailsFragment : UnchainedFragment(), DownloadDetailsListener {
             dialog.show(parentFragmentManager, "ServicePickerDialog")
         }
 
+        val openWithLayout = popup.contentView.findViewById<ConstraintLayout>(R.id.openWithLayout)
+        openWithLayout.setOnClickListener {
+            context?.openMediaWithChooser(
+                url ?: args.details.link,
+                if (url == null) args.details.mimeType else null,
+            )
+            if (popup.isShowing) popup.dismiss()
+        }
+
         // no known TorBox equivalent to RD's browser-streaming page (a URL you could open
         // directly), so this option is always hidden rather than guessed at
         val browserLayout =
@@ -550,37 +581,20 @@ class DownloadDetailsFragment : UnchainedFragment(), DownloadDetailsListener {
         return popup
     }
 
-    private fun tryStartExternalApp(intent: Intent) {
-        try {
-            startActivity(intent)
-        } catch (e: ActivityNotFoundException) {
-            context?.showToast(R.string.app_not_installed)
-        }
-    }
-
-    private fun createMediaIntent(
-        appPackage: String,
-        url: String,
-        component: ComponentName? = null,
-        dataType: String = "video/*",
-    ): Intent {
-
-        val uri = url.toUri()
-        val intent = Intent(Intent.ACTION_VIEW)
-        intent.setPackage(appPackage)
-        intent.setDataAndTypeAndNormalize(uri, dataType)
-        if (component != null) intent.component = component
-
-        return intent
-    }
-
     override fun onCopyClick(text: String) {
         copyToClipboard(getString(R.string.torbox_download_link), text)
         context?.showToast(R.string.link_copied)
     }
 
     override fun onOpenClick(url: String) {
-        context?.openExternalWebPage(url)
+        // opening a media url in a browser is useless on a TV, where there usually is none, so
+        // hand it to a player through the system chooser instead. Phones keep the browser
+        // behaviour.
+        if (context?.isTv() == true) {
+            context?.openMediaWithChooser(url)
+        } else {
+            context?.openExternalWebPage(url)
+        }
     }
 
     override fun onOpenTranscodedStream(view: View, url: String) {
@@ -609,62 +623,15 @@ class DownloadDetailsFragment : UnchainedFragment(), DownloadDetailsListener {
     }
 
     override fun onSendToPlayer(url: String) {
-        when (viewModel.getDefaultPlayer()) {
-            "vlc" -> {
-                val vlcIntent = createMediaIntent("org.videolan.vlc", url)
-                tryStartExternalApp(vlcIntent)
-            }
-
-            "mpv" -> {
-                val mpvIntent = createMediaIntent("is.xyz.mpv", url)
-                tryStartExternalApp(mpvIntent)
-            }
-
-            "mx_player" -> {
-                val mxIntent = createMediaIntent("com.mxtech.videoplayer.pro", url)
-
-                try {
-                    startActivity(mxIntent)
-                } catch (e: ActivityNotFoundException) {
-                    mxIntent.setPackage("com.mxtech.videoplayer.ad")
-                    tryStartExternalApp(mxIntent)
-                }
-            }
-
-            "web_video_cast" -> {
-                val wvcIntent = createMediaIntent("com.instantbits.cast.webvideo", url)
-                tryStartExternalApp(wvcIntent)
-            }
-
-            "play_it" -> {
-                val wvcIntent = createMediaIntent("com.playit.videoplayer", url)
-                tryStartExternalApp(wvcIntent)
-            }
-
-            "player_just_video" -> {
-                val wvcIntent = createMediaIntent("com.brouken.player", url)
-                tryStartExternalApp(wvcIntent)
-            }
-
-            "custom_player" -> {
-                val customPlayerPackage = viewModel.getCustomPlayerPreference()
-                if (customPlayerPackage.isBlank()) {
-                    context?.showToast(R.string.invalid_package)
-                } else {
-                    val customIntent = createMediaIntent(customPlayerPackage, url)
-                    tryStartExternalApp(customIntent)
-                }
-            }
-
-            else -> {
-                context?.showToast(R.string.missing_default_player)
-            }
-        }
+        // hand the url straight to the remembered preferred player (or its picker, if none is set
+        // yet), so the user's choice is respected with no player list to maintain
+        context?.playWithPreferredVideoPlayer(url.toUri())
     }
 
     companion object {
         const val SHOW_SHARE_BUTTON = "show_share_button"
         const val SHOW_OPEN_BUTTON = "show_open_button"
+        const val SHOW_OPEN_WITH_BUTTON = "show_open_with_button"
         const val SHOW_COPY_BUTTON = "show_copy_button"
         const val SHOW_DOWNLOAD_BUTTON = "show_download_button"
         const val SHOW_MEDIA_BUTTON = "show_media_button"

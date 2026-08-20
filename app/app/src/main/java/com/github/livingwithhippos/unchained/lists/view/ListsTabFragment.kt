@@ -272,7 +272,7 @@ class ListsTabFragment : UnchainedFragment() {
                                                 webDownload = null,
                                             )
                                     findNavController().navigate(action)
-                                } else viewModel.unrestrictTorrent(item)
+                                } else viewModel.openTorrentFile(item)
                             }
                             // still downloading, files known: open the torrent details fragment
                             else -> {
@@ -939,7 +939,7 @@ class TorrentsListFragment : UnchainedFragment(), TorrentListListener {
                 }
 
                 item.downloadPresent -> {
-                    // unrestrict and move to download tab
+                    // multi-file: browse the folder; single-file: resolve straight to a link
                     if (item.files!!.size > 1) {
                         val action =
                             ListsTabFragmentDirections.actionListTabsDestToFolderListFragment2(
@@ -952,7 +952,7 @@ class TorrentsListFragment : UnchainedFragment(), TorrentListListener {
                             Timber.e(
                                 "Correct tab was not ready within 2 seconds after clicking torrent $item"
                             )
-                    } else viewModel.unrestrictTorrent(item)
+                    } else viewModel.openTorrentFile(item)
                 }
 
                 else -> {

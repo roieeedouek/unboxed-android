@@ -109,11 +109,16 @@ data class CreatedTorrent(
     @param:Json(name = "auth_id") val authId: String?,
 ) : Parcelable
 
-/** Body of `POST torrents/controltorrent` and `POST webdl/controlwebdownload`. */
+/**
+ * Body of `POST torrents/controltorrent` and `POST webdl/controlwebdownload`. TorBox's OpenAPI
+ * spec confirms these two endpoints don't share a field name for the item id despite sharing
+ * every other field: `ControlTorrent.torrent_id` vs `ControlWebDownload.webdl_id` (note this is
+ * *not* the same as `webdl/requestdl`'s `web_id` query param - that one really is `web_id`).
+ */
 @JsonClass(generateAdapter = true)
 data class ItemControlRequest(
     @param:Json(name = "torrent_id") val torrentId: Long? = null,
-    @param:Json(name = "web_id") val webId: Long? = null,
+    @param:Json(name = "webdl_id") val webId: Long? = null,
     @param:Json(name = "operation") val operation: String,
     @param:Json(name = "all") val all: Boolean = false,
 )
