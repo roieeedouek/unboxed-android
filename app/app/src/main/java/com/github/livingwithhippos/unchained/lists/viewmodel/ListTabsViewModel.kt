@@ -190,71 +190,102 @@ constructor(
         if (queryLiveData.value != query) queryLiveData.postValue(query?.trim() ?: "")
     }
 
+    // Guards against the same item being sent to the delete endpoint twice while a previous
+    // request for it is still in flight - e.g. an impatient double-tap on a delete button that
+    // has no confirmation step in between. TorBox's backend doesn't handle two concurrent deletes
+    // of the same torrent/download gracefully: one succeeds, the other 500s with a raw
+    // DATABASE_ERROR even though the item genuinely is gone (confirmed live against the API).
+    // Rejecting the duplicate client-side before it's even sent avoids that race entirely.
+    private val torrentsBeingDeleted = mutableSetOf<Long>()
+    private val downloadsBeingDeleted = mutableSetOf<Long>()
+    private var isDeletingAllTorrents = false
+    private var isDeletingAllDownloads = false
+
     fun deleteAllDownloads() {
+        if (isDeletingAllDownloads) return
+        isDeletingAllDownloads = true
         viewModelScope.launch {
-            deletedDownloadLiveData.postEvent(0)
-            var offset = 0
-            val pageSize = 50
-            val completeDownloadList = mutableListOf<WebDownloadItem>()
-            do {
-                val downloads = downloadRepository.getDownloads(offset, pageSize)
-                completeDownloadList.addAll(downloads)
-                offset += pageSize
-            } while (downloads.size >= pageSize)
+            try {
+                deletedDownloadLiveData.postEvent(0)
+                var offset = 0
+                val pageSize = 50
+                val completeDownloadList = mutableListOf<WebDownloadItem>()
+                do {
+                    val downloads = downloadRepository.getDownloads(offset, pageSize)
+                    completeDownloadList.addAll(downloads)
+                    offset += pageSize
+                } while (downloads.size >= pageSize)
 
-            // post a message every 10% of the deletion progress if there are more than 10 items
-            val progressIndicator: Int =
-                if (completeDownloadList.size / 10 < 15) 15 else completeDownloadList.size / 10
+                // post a message every 10% of the deletion progress if there are more than 10
+                // items
+                val progressIndicator: Int =
+                    if (completeDownloadList.size / 10 < 15) 15 else completeDownloadList.size / 10
 
-            val errors = mutableListOf<UnchainedNetworkException>()
-            completeDownloadList.forEachIndexed { index, item ->
-                val result = downloadRepository.deleteDownload(item.id)
-                if (result is EitherResult.Failure) errors.add(result.failure)
-                if ((index + 1) % progressIndicator == 0)
-                    deletedDownloadLiveData.postEvent(index + 1)
+                val errors = mutableListOf<UnchainedNetworkException>()
+                completeDownloadList.forEachIndexed { index, item ->
+                    val result = downloadRepository.deleteDownload(item.id)
+                    if (result is EitherResult.Failure) errors.add(result.failure)
+                    if ((index + 1) % progressIndicator == 0)
+                        deletedDownloadLiveData.postEvent(index + 1)
+                }
+
+                if (errors.isNotEmpty()) errorsLiveData.postEvent(errors)
+                deletedDownloadLiveData.postEvent(DOWNLOADS_DELETED_ALL)
+            } finally {
+                isDeletingAllDownloads = false
             }
-
-            if (errors.isNotEmpty()) errorsLiveData.postEvent(errors)
-            deletedDownloadLiveData.postEvent(DOWNLOADS_DELETED_ALL)
         }
     }
 
     fun deleteAllTorrents() {
+        if (isDeletingAllTorrents) return
+        isDeletingAllTorrents = true
         viewModelScope.launch {
-            var offset = 0
-            val pageSize = 50
-            val errors = mutableListOf<UnchainedNetworkException>()
-            do {
-                val torrents = torrentsRepository.getTorrentsList(offset, pageSize)
-                torrents.forEach { torrent ->
-                    val result = torrentsRepository.deleteTorrent(torrent.id)
-                    if (result is EitherResult.Failure) errors.add(result.failure)
-                }
-                offset += pageSize
-            } while (torrents.size >= pageSize)
+            try {
+                var offset = 0
+                val pageSize = 50
+                val errors = mutableListOf<UnchainedNetworkException>()
+                do {
+                    val torrents = torrentsRepository.getTorrentsList(offset, pageSize)
+                    torrents.forEach { torrent ->
+                        val result = torrentsRepository.deleteTorrent(torrent.id)
+                        if (result is EitherResult.Failure) errors.add(result.failure)
+                    }
+                    offset += pageSize
+                } while (torrents.size >= pageSize)
 
-            if (errors.isNotEmpty()) errorsLiveData.postEvent(errors)
-            deletedTorrentLiveData.postEvent(TORRENTS_DELETED_ALL)
+                if (errors.isNotEmpty()) errorsLiveData.postEvent(errors)
+                deletedTorrentLiveData.postEvent(TORRENTS_DELETED_ALL)
+            } finally {
+                isDeletingAllTorrents = false
+            }
         }
     }
 
     fun deleteTorrents(torrents: List<TorrentItem>) {
-        viewModelScope.launch {
-            val results = torrents.map { torrentsRepository.deleteTorrent(it.id) }
-            val errors =
-                results.filterIsInstance<EitherResult.Failure<UnchainedNetworkException>>().map {
-                    it.failure
-                }
-            val deletedCount = results.count { it is EitherResult.Success }
+        // drop any item that's already mid-deletion instead of sending it again
+        val toDelete = torrents.filter { torrentsBeingDeleted.add(it.id) }
+        if (toDelete.isEmpty()) return
 
-            if (errors.isNotEmpty()) errorsLiveData.postEvent(errors)
-            deletedTorrentLiveData.postEvent(
-                when {
-                    deletedCount == 0 -> TORRENT_NOT_DELETED
-                    torrents.size > 1 -> TORRENTS_DELETED
-                    else -> TORRENT_DELETED
-                }
-            )
+        viewModelScope.launch {
+            try {
+                val results = toDelete.map { torrentsRepository.deleteTorrent(it.id) }
+                val errors =
+                    results.filterIsInstance<EitherResult.Failure<UnchainedNetworkException>>()
+                        .map { it.failure }
+                val deletedCount = results.count { it is EitherResult.Success }
+
+                if (errors.isNotEmpty()) errorsLiveData.postEvent(errors)
+                deletedTorrentLiveData.postEvent(
+                    when {
+                        deletedCount == 0 -> TORRENT_NOT_DELETED
+                        toDelete.size > 1 -> TORRENTS_DELETED
+                        else -> TORRENT_DELETED
+                    }
+                )
+            } finally {
+                toDelete.forEach { torrentsBeingDeleted.remove(it.id) }
+            }
         }
     }
 
@@ -263,22 +294,29 @@ constructor(
     }
 
     fun deleteDownloads(downloads: List<WebDownloadItem>) {
-        viewModelScope.launch {
-            val results = downloads.map { downloadRepository.deleteDownload(it.id) }
-            val errors =
-                results.filterIsInstance<EitherResult.Failure<UnchainedNetworkException>>().map {
-                    it.failure
-                }
-            val deletedCount = results.count { it is EitherResult.Success }
+        // drop any item that's already mid-deletion instead of sending it again
+        val toDelete = downloads.filter { downloadsBeingDeleted.add(it.id) }
+        if (toDelete.isEmpty()) return
 
-            if (errors.isNotEmpty()) errorsLiveData.postEvent(errors)
-            deletedDownloadLiveData.postEvent(
-                when {
-                    deletedCount == 0 -> DOWNLOAD_NOT_DELETED
-                    downloads.size > 1 -> DOWNLOADS_DELETED
-                    else -> DOWNLOAD_DELETED
-                }
-            )
+        viewModelScope.launch {
+            try {
+                val results = toDelete.map { downloadRepository.deleteDownload(it.id) }
+                val errors =
+                    results.filterIsInstance<EitherResult.Failure<UnchainedNetworkException>>()
+                        .map { it.failure }
+                val deletedCount = results.count { it is EitherResult.Success }
+
+                if (errors.isNotEmpty()) errorsLiveData.postEvent(errors)
+                deletedDownloadLiveData.postEvent(
+                    when {
+                        deletedCount == 0 -> DOWNLOAD_NOT_DELETED
+                        toDelete.size > 1 -> DOWNLOADS_DELETED
+                        else -> DOWNLOAD_DELETED
+                    }
+                )
+            } finally {
+                toDelete.forEach { downloadsBeingDeleted.remove(it.id) }
+            }
         }
     }
 

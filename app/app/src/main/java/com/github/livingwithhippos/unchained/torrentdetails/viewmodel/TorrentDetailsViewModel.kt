@@ -33,6 +33,7 @@ constructor(private val torrentsRepository: TorrentsRepository) : ViewModel() {
     val errorsLiveData = MutableLiveData<Event<List<UnchainedNetworkException>>>()
 
     private var job: Job? = null
+    private var isDeleting = false
 
     fun getFullTorrentInfo(id: Long) {
         viewModelScope.launch {
@@ -63,14 +64,30 @@ constructor(private val torrentsRepository: TorrentsRepository) : ViewModel() {
     }
 
     fun deleteTorrent(id: Long) {
+        // avoid sending the same delete twice from an impatient double-tap: TorBox's backend
+        // races on two concurrent deletes of the same torrent, 500ing one of them with a raw
+        // DATABASE_ERROR even though the torrent genuinely does get removed either way
+        if (isDeleting) return
+        isDeleting = true
+        // stop polling this torrent's info now - it's about to stop existing, and polling a
+        // deleted torrent just keeps hitting the same DATABASE_ERROR for no reason
+        job?.cancelIfActive()
         viewModelScope.launch {
-            when (val deleted = torrentsRepository.deleteTorrent(id)) {
-                is EitherResult.Failure -> {
-                    errorsLiveData.postEvent(listOf(deleted.failure))
+            try {
+                when (val deleted = torrentsRepository.deleteTorrent(id)) {
+                    is EitherResult.Failure -> {
+                        errorsLiveData.postEvent(listOf(deleted.failure))
+                        // the reported error might not reflect reality: TorBox can race and 500 a
+                        // delete that actually went through server-side. -1 tells the fragment to
+                        // refresh the other list screen without treating this as a success.
+                        deletedTorrentLiveData.postEvent(-1)
+                    }
+                    is EitherResult.Success -> {
+                        deletedTorrentLiveData.postEvent(204)
+                    }
                 }
-                is EitherResult.Success -> {
-                    deletedTorrentLiveData.postEvent(204)
-                }
+            } finally {
+                isDeleting = false
             }
         }
     }

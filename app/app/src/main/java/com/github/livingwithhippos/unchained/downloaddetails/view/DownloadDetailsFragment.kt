@@ -38,7 +38,11 @@ import com.github.livingwithhippos.unchained.data.local.CompleteRemoteService
 import com.github.livingwithhippos.unchained.data.local.RemoteServiceType
 import com.github.livingwithhippos.unchained.data.local.serviceTypeMap
 import com.github.livingwithhippos.unchained.data.model.Alternative
+import com.github.livingwithhippos.unchained.data.model.ApiConversionError
 import com.github.livingwithhippos.unchained.data.model.DownloadItem
+import com.github.livingwithhippos.unchained.data.model.EmptyBodyError
+import com.github.livingwithhippos.unchained.data.model.NetworkError
+import com.github.livingwithhippos.unchained.data.model.TorBoxApiError
 import com.github.livingwithhippos.unchained.databinding.FragmentDownloadDetailsBinding
 import com.github.livingwithhippos.unchained.downloaddetails.model.AlternativeDownloadAdapter
 import com.github.livingwithhippos.unchained.downloaddetails.model.DownloadDetailsListener
@@ -48,6 +52,7 @@ import com.github.livingwithhippos.unchained.downloaddetails.viewmodel.DownloadE
 import com.github.livingwithhippos.unchained.lists.view.ListState
 import com.github.livingwithhippos.unchained.utilities.EventObserver
 import com.github.livingwithhippos.unchained.utilities.extension.copyToClipboard
+import com.github.livingwithhippos.unchained.utilities.extension.getApiErrorMessage
 import com.github.livingwithhippos.unchained.utilities.extension.getAvailableSpace
 import com.github.livingwithhippos.unchained.utilities.extension.getFileSizeString
 import com.github.livingwithhippos.unchained.utilities.extension.isTv
@@ -256,11 +261,41 @@ class DownloadDetailsFragment : UnchainedFragment(), DownloadDetailsListener {
         viewModel.deletedDownloadLiveData.observe(
             viewLifecycleOwner,
             EventObserver {
-                // todo: check returned value (it)
-                context?.showToast(R.string.download_removed)
-                activityViewModel.setListState(ListState.UpdateDownload)
-                // if deleted go back
-                findNavController().popBackStack()
+                if (it > 0) {
+                    context?.showToast(R.string.download_removed)
+                    activityViewModel.setListState(ListState.UpdateDownload)
+                    // if deleted go back
+                    findNavController().popBackStack()
+                } else {
+                    // the actual error is reported through errorsLiveData; still refresh the list
+                    // in case the delete actually went through server-side despite the error
+                    // (TorBox can race and 500 a delete that succeeded, see errorsLiveData below)
+                    activityViewModel.setListState(ListState.UpdateDownload)
+                }
+            },
+        )
+
+        viewModel.errorsLiveData.observe(
+            viewLifecycleOwner,
+            EventObserver {
+                for (error in it) {
+                    when (error) {
+                        is TorBoxApiError -> {
+                            context?.let { c ->
+                                c.showToast(c.getApiErrorMessage(error.error, error.detail))
+                            }
+                        }
+
+                        is EmptyBodyError -> {}
+                        is NetworkError -> {
+                            context?.showToast(R.string.network_error)
+                        }
+
+                        is ApiConversionError -> {
+                            context?.showToast(R.string.parsing_error)
+                        }
+                    }
+                }
             },
         )
 

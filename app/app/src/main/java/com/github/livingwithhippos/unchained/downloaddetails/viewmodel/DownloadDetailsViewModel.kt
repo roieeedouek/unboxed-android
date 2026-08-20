@@ -10,6 +10,7 @@ import com.github.livingwithhippos.unchained.data.local.CompleteRemoteServiceDet
 import com.github.livingwithhippos.unchained.data.local.RemoteServiceType
 import com.github.livingwithhippos.unchained.data.model.KodiDevice
 import com.github.livingwithhippos.unchained.data.model.Stream
+import com.github.livingwithhippos.unchained.data.model.UnchainedNetworkException
 import com.github.livingwithhippos.unchained.data.remote.StreamContentType
 import com.github.livingwithhippos.unchained.data.repository.KodiRepository
 import com.github.livingwithhippos.unchained.data.repository.ServiceRepository
@@ -42,8 +43,14 @@ constructor(
 
     val streamLiveData = MutableLiveData<Stream?>()
     val deletedDownloadLiveData = MutableLiveData<Event<Int>>()
+    val errorsLiveData = MutableLiveData<Event<List<UnchainedNetworkException>>>()
     val messageLiveData = MutableLiveData<Event<DownloadDetailsMessage>>()
     val eventLiveData = MutableLiveData<Event<DownloadEvent>>()
+
+    // avoids sending the same delete twice from an impatient double-tap: TorBox's backend races
+    // on two concurrent deletes of the same item, 500ing one of them with a raw DATABASE_ERROR
+    // even though the item genuinely does get removed either way
+    private var isDeleting = false
 
     fun fetchStreamingInfo(contentId: Long, fileId: Long, contentType: String) {
         viewModelScope.launch {
@@ -62,15 +69,25 @@ constructor(
      * list), so this deletes the whole torrent/webdl item the file belongs to.
      */
     fun deleteDownload(contentId: Long, contentType: String) {
+        if (isDeleting) return
+        isDeleting = true
         viewModelScope.launch {
-            val result =
-                when (contentType) {
-                    StreamContentType.WEB_DOWNLOAD -> webDownloadRepository.deleteWebDownload(contentId)
-                    else -> torrentsRepository.deleteTorrent(contentId)
+            try {
+                val result =
+                    when (contentType) {
+                        StreamContentType.WEB_DOWNLOAD ->
+                            webDownloadRepository.deleteWebDownload(contentId)
+                        else -> torrentsRepository.deleteTorrent(contentId)
+                    }
+                when (result) {
+                    is EitherResult.Failure -> {
+                        errorsLiveData.postEvent(listOf(result.failure))
+                        deletedDownloadLiveData.postEvent(-1)
+                    }
+                    is EitherResult.Success -> deletedDownloadLiveData.postEvent(1)
                 }
-            when (result) {
-                is EitherResult.Failure -> deletedDownloadLiveData.postEvent(-1)
-                is EitherResult.Success -> deletedDownloadLiveData.postEvent(1)
+            } finally {
+                isDeleting = false
             }
         }
     }

@@ -198,11 +198,17 @@ class TorrentDetailsFragment : UnchainedFragment(), TorrentContentListener {
         viewModel.deletedTorrentLiveData.observe(
             viewLifecycleOwner,
             EventObserver {
-                // todo: check returned value (it)
-                context?.showToast(R.string.torrent_removed)
-                activityViewModel.setListState(ListState.UpdateTorrent)
-                // if deleted go back
-                findNavController().popBackStack()
+                if (it > 0) {
+                    context?.showToast(R.string.torrent_removed)
+                    activityViewModel.setListState(ListState.UpdateTorrent)
+                    // if deleted go back
+                    findNavController().popBackStack()
+                } else {
+                    // the actual error is reported through errorsLiveData; still refresh the
+                    // other list screen in case the delete actually went through server-side
+                    // despite the error
+                    activityViewModel.setListState(ListState.UpdateTorrent)
+                }
             },
         )
 

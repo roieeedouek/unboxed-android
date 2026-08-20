@@ -629,7 +629,13 @@ class DownloadsListFragment : UnchainedFragment(), DownloadListListener {
             viewLifecycleOwner,
             EventObserver {
                 when (it) {
-                    DOWNLOAD_NOT_DELETED -> {}
+                    DOWNLOAD_NOT_DELETED -> {
+                        // the reported error might not reflect reality: TorBox can race and 500 a
+                        // delete that actually went through server-side, see ListTabsViewModel's
+                        // in-flight delete guard. Refresh so the list reflects true server state
+                        // regardless.
+                        downloadAdapter.refresh()
+                    }
                     DOWNLOAD_DELETED -> {
                         context?.showToast(R.string.download_removed)
                         downloadAdapter.refresh()
@@ -841,7 +847,13 @@ class TorrentsListFragment : UnchainedFragment(), TorrentListListener {
             viewLifecycleOwner,
             EventObserver {
                 when (it) {
-                    TORRENT_NOT_DELETED -> {}
+                    TORRENT_NOT_DELETED -> {
+                        // the reported error might not reflect reality: TorBox can race and 500 a
+                        // delete that actually went through server-side, see ListTabsViewModel's
+                        // in-flight delete guard. Refresh so the list reflects true server state
+                        // regardless.
+                        torrentAdapter.refresh()
+                    }
                     TORRENT_DELETED -> {
                         context?.showToast(R.string.torrent_removed)
                         torrentAdapter.refresh()
