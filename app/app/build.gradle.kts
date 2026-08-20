@@ -52,8 +52,8 @@ android {
         applicationId = "com.github.roieeedouek.unboxed"
         minSdk = 27
         targetSdk = 37
-        versionCode = 60
-        versionName = "1.7.1"
+        versionCode = 61
+        versionName = "1.7.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

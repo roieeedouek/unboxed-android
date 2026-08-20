@@ -3,7 +3,8 @@ package com.github.livingwithhippos.unchained.utilities
 import com.github.livingwithhippos.unchained.R
 
 const val BASE_URL = "https://api.torbox.app/v1/api/"
-const val REFERRAL_LINK = "https://torbox.app/subscription"
+const val REFERRAL_LINK =
+    "https://torbox.app/subscription?referral=5334efdc-8deb-4389-8e41-cc706549d326"
 const val ACCOUNT_LINK = "https://torbox.app/settings"
 const val DEFAULT_PLUGINS_REPOSITORY_LINK =
     "https://gitlab.com/LivingWithHippos/unchained-plugins/-/raw/main/repository/repo.json"
